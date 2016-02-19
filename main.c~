@@ -1,0 +1,73 @@
+/* Name: main.c
+ * Author: <insert your name here>
+ * Copyright: <insert your copyright message here>
+ * License: <insert your license reference here>
+ */
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <lcd_functions.h>
+#include <lcd_driver.h>
+
+#include <stdio.h>
+#include <inttypes.h>
+
+int InitButterfly( void );
+int InitSound( void );
+
+int
+InitButterfly( void )
+{
+  PCMSK0 = 0x00;
+  PCMSK1 = 0x00;
+
+  DIDR0 = 0x00;
+  DIDR1 = 0x00;
+  return 0;
+}
+
+int
+InitSound( void )
+{
+  // Enable PortB5 output
+  DDRB = DDRB | ( 1 << PB5 );
+  // Set output pin Port B5 to 0
+  PORTB = ( PORTB & ( ~ ( 1 << PB5 ) ) ) | ( 0 << PB5 );
+  // Enable output compare toggle mode
+  TCCR1A = ( TCCR1A & (~ ( ( 1 << COM1A1 ) | (1 << COM1A0) ) ) ) | ( ( 1 << COM1A1 ) | ( 0 << COM1A0 ) );
+  // Enable phase and frequency correct mode, WGM=1000
+  TCCR1B = ( TCCR1B & (~ ( ( 1 << WGM13 ) | (1 << WGM12) ) ) ) | ( ( 1 << WGM13 ) | ( 0 << WGM12 ) );
+  TCCR1A = ( TCCR1A & (~ ( ( 1 << WGM11 ) | (1 << WGM10) ) ) ) | ( ( 0 << WGM11 ) | ( 0 << WGM10 ) );
+
+  // Set clock to prescalar of 1
+  TCCR1B = ( TCCR1B & (~ ( ( 1 << CS12 ) | ( 1 << CS11 ) | ( 1 << CS10 ) ) ) ) | ( ( 0 << CS12 ) | ( 0 << CS11 ) | ( 1 << CS10 ) );
+  return 0;
+}
+
+#define A_440 ( (uint16_t) ( 2000000UL / (440UL*2) ) )
+#define E_659 ( (uint16_t) ( 2000000UL / (659.25*2) ) )
+
+int main(void)
+{
+  cli();
+  InitButterfly();
+  LCD_Init();
+  InitSound();
+  sei();
+    
+  /* insert your hardware initialization here */
+  char buffer[16];
+  snprintf(buffer, sizeof(buffer), "ICR1: %d", A_440);
+  LCD_puts(buffer, 0);
+
+  for(;;)
+    {
+      
+      ICR1 = E_659;
+      OCR1A = 500;
+      _delay_ms(500);
+      /* insert your main loop code here */
+    }
+  return 0;   /* never reached */
+}

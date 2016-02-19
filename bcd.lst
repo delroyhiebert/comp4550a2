@@ -1,0 +1,195 @@
+   1               		.file	"bcd.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   9               		.text
+  10               	.Ltext0:
+  61               	.global	CHAR2BCD2
+  63               	CHAR2BCD2:
+  64               		.stabd	46,0,0
+   1:bcd.c         **** //***************************************************************************
+   2:bcd.c         **** //  File........: BCD.c
+   3:bcd.c         **** //  Author(s)...: ATMEL Norway
+   4:bcd.c         **** //  Target(s)...: ATmega169
+   5:bcd.c         **** //  Compiler....: IAR EWAAVR 2.28a
+   6:bcd.c         **** //  Description.: AVR Butterfly BCD conversion algorithms
+   7:bcd.c         **** //  Revisions...: 1.0
+   8:bcd.c         **** //  YYYYMMDD - VER. - COMMENT                                       - SIGN.
+   9:bcd.c         **** //  20030116 - 1.0  - Created                                       - KS
+  10:bcd.c         **** //***************************************************************************
+  11:bcd.c         **** 
+  12:bcd.c         **** 
+  13:bcd.c         **** 
+  14:bcd.c         **** /*****************************************************************************
+  15:bcd.c         **** *   Function name : CHAR2BCD2
+  16:bcd.c         **** *   Returns :       Binary coded decimal value of the input (2 digits)
+  17:bcd.c         **** *   Parameters :    Value between (0-99) to be encoded into BCD 
+  18:bcd.c         **** *   Purpose :       Convert a character into a BCD encoded character.
+  19:bcd.c         **** *                   The input must be in the range 0 to 99.
+  20:bcd.c         **** *                   The result is byte where the high and low nibbles
+  21:bcd.c         **** *                   contain the tens and ones of the input.
+  22:bcd.c         **** *****************************************************************************/
+  23:bcd.c         **** char CHAR2BCD2(char input)
+  24:bcd.c         **** {
+  66               	.LM0:
+  67               	.LFBB1:
+  68               	/* prologue: function */
+  69               	/* frame size = 0 */
+  70               	/* stack size = 0 */
+  71               	.L__stack_usage = 0
+  25:bcd.c         ****     char high = 0;
+  73               	.LM1:
+  74 0000 20E0      		ldi r18,0
+  75               	.L2:
+  26:bcd.c         ****     
+  27:bcd.c         ****     
+  28:bcd.c         ****     while (input >= 10)                 // Count tens
+  77               	.LM2:
+  78 0002 8A30      		cpi r24,lo8(10)
+  79 0004 00F0      		brlo .L5
+  29:bcd.c         ****     {
+  30:bcd.c         ****         high++;
+  81               	.LM3:
+  82 0006 2F5F      		subi r18,lo8(-(1))
+  31:bcd.c         ****         input -= 10;
+  84               	.LM4:
+  85 0008 8A50      		subi r24,lo8(-(-10))
+  86 000a 00C0      		rjmp .L2
+  87               	.L5:
+  32:bcd.c         ****     }
+  33:bcd.c         **** 
+  34:bcd.c         ****     return  (high << 4) | input;        // Add ones and return answer
+  89               	.LM5:
+  90 000c 90E1      		ldi r25,lo8(16)
+  91 000e 299F      		mul r18,r25
+  92 0010 9001      		movw r18,r0
+  93 0012 1124      		clr __zero_reg__
+  35:bcd.c         **** }
+  95               	.LM6:
+  96 0014 822B      		or r24,r18
+  97 0016 0895      		ret
+ 102               	.Lscope1:
+ 104               		.stabd	78,0,0
+ 107               	.global	CHAR2BCD3
+ 109               	CHAR2BCD3:
+ 110               		.stabd	46,0,0
+  36:bcd.c         **** 
+  37:bcd.c         **** /*****************************************************************************
+  38:bcd.c         **** *
+  39:bcd.c         **** *   Function name : CHAR2BCD3
+  40:bcd.c         **** *
+  41:bcd.c         **** *   Returns :       Binary coded decimal value of the input (3 digits)
+  42:bcd.c         **** *
+  43:bcd.c         **** *   Parameters :    Value between (0-255) to be encoded into BCD 
+  44:bcd.c         **** *
+  45:bcd.c         **** *   Purpose :       Convert a character into a BCD encoded character.
+  46:bcd.c         **** *                   The input must be in the range 0 to 255.
+  47:bcd.c         **** *                   The result is an integer where the three lowest nibbles
+  48:bcd.c         **** *                   contain the ones, tens and hundreds of the input.
+  49:bcd.c         **** *
+  50:bcd.c         **** *****************************************************************************/
+  51:bcd.c         **** unsigned int CHAR2BCD3(char input)
+  52:bcd.c         **** {
+ 112               	.LM7:
+ 113               	.LFBB2:
+ 114               	/* prologue: function */
+ 115               	/* frame size = 0 */
+ 116               	/* stack size = 0 */
+ 117               	.L__stack_usage = 0
+  53:bcd.c         ****     int high = 0;
+  54:bcd.c         ****         
+  55:bcd.c         ****     while (input >= 100)                // Count hundreds
+ 119               	.LM8:
+ 120 0018 8436      		cpi r24,lo8(100)
+ 121 001a 00F0      		brlo .L10
+  56:bcd.c         ****     {
+  57:bcd.c         ****         high++;
+  58:bcd.c         ****         input -= 100;
+ 123               	.LM9:
+ 124 001c 9CE9      		ldi r25,lo8(-100)
+ 125 001e 980F      		add r25,r24
+  55:bcd.c         ****     while (input >= 100)                // Count hundreds
+ 127               	.LM10:
+ 128 0020 9436      		cpi r25,lo8(100)
+ 129 0022 00F0      		brlo .L11
+ 131               	.LM11:
+ 132 0024 885C      		subi r24,lo8(-(56))
+  57:bcd.c         ****         high++;
+ 134               	.LM12:
+ 135 0026 22E0      		ldi r18,lo8(2)
+ 136 0028 30E0      		ldi r19,0
+ 137 002a 00C0      		rjmp .L7
+ 138               	.L10:
+  53:bcd.c         ****     int high = 0;
+ 140               	.LM13:
+ 141 002c 20E0      		ldi r18,0
+ 142 002e 30E0      		ldi r19,0
+ 143 0030 00C0      		rjmp .L7
+ 144               	.L11:
+  55:bcd.c         ****     while (input >= 100)                // Count hundreds
+ 146               	.LM14:
+ 147 0032 892F      		mov r24,r25
+  57:bcd.c         ****         high++;
+ 149               	.LM15:
+ 150 0034 21E0      		ldi r18,lo8(1)
+ 151 0036 30E0      		ldi r19,0
+ 152               	.L7:
+  59:bcd.c         ****     }
+  60:bcd.c         **** 
+  61:bcd.c         ****     high <<= 4;
+ 154               	.LM16:
+ 155 0038 44E0      		ldi r20,4
+ 156               		1:
+ 157 003a 220F      		lsl r18
+ 158 003c 331F      		rol r19
+ 159 003e 4A95      		dec r20
+ 160 0040 01F4      		brne 1b
+ 161               	.L8:
+  62:bcd.c         ****     
+  63:bcd.c         ****     while (input >= 10)                 // Count tens
+ 163               	.LM17:
+ 164 0042 8A30      		cpi r24,lo8(10)
+ 165 0044 00F0      		brlo .L12
+  64:bcd.c         ****     {
+  65:bcd.c         ****         high++;
+ 167               	.LM18:
+ 168 0046 2F5F      		subi r18,-1
+ 169 0048 3F4F      		sbci r19,-1
+  66:bcd.c         ****         input -= 10;
+ 171               	.LM19:
+ 172 004a 8A50      		subi r24,lo8(-(-10))
+ 173 004c 00C0      		rjmp .L8
+ 174               	.L12:
+  67:bcd.c         ****     }
+  68:bcd.c         **** 
+  69:bcd.c         ****     return  (high << 4) | input;        // Add ones and return answer
+ 176               	.LM20:
+ 177 004e 94E0      		ldi r25,4
+ 178               		1:
+ 179 0050 220F      		lsl r18
+ 180 0052 331F      		rol r19
+ 181 0054 9A95      		dec r25
+ 182 0056 01F4      		brne 1b
+  70:bcd.c         **** }
+ 184               	.LM21:
+ 185 0058 A901      		movw r20,r18
+ 186 005a 482B      		or r20,r24
+ 187 005c CA01      		movw r24,r20
+ 188 005e 0895      		ret
+ 190               	.Lscope2:
+ 192               		.stabd	78,0,0
+ 194               	.Letext0:
+ 195               		.ident	"GCC: (GNU) 4.8.2"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 bcd.c
+     /tmp/ccq2KQMc.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccq2KQMc.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccq2KQMc.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccq2KQMc.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccq2KQMc.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccq2KQMc.s:63     .text:0000000000000000 CHAR2BCD2
+     /tmp/ccq2KQMc.s:109    .text:0000000000000018 CHAR2BCD3
+
+NO UNDEFINED SYMBOLS

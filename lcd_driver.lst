@@ -1,0 +1,908 @@
+   1               		.file	"lcd_driver.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   9               		.text
+  10               	.Ltext0:
+ 110               	.global	LCD_WriteDigit
+ 112               	LCD_WriteDigit:
+ 113               		.stabd	46,0,0
+   1:lcd_driver.c  **** //
+   2:lcd_driver.c  **** //  Author(s)...: ATMEL Norway
+   3:lcd_driver.c  **** //
+   4:lcd_driver.c  **** //  Target(s)...: ATmega169
+   5:lcd_driver.c  **** //
+   6:lcd_driver.c  **** //  mt - used for debugging only - may not work
+   7:lcd_driver.c  **** 
+   8:lcd_driver.c  **** // Include files.
+   9:lcd_driver.c  **** #include <avr/io.h>
+  10:lcd_driver.c  **** #include <avr/pgmspace.h>
+  11:lcd_driver.c  **** #include <inttypes.h>
+  12:lcd_driver.c  **** #include <avr/interrupt.h>
+  13:lcd_driver.c  **** //#include <avr/signal.h>
+  14:lcd_driver.c  **** 
+  15:lcd_driver.c  **** #include "lcd_driver.h"
+  16:lcd_driver.c  **** 
+  17:lcd_driver.c  **** #define BOOL    char
+  18:lcd_driver.c  **** #define FALSE   0
+  19:lcd_driver.c  **** #define TRUE    (!FALSE)
+  20:lcd_driver.c  **** 
+  21:lcd_driver.c  **** // Variable from "button.c" to prevent button-bouncing
+  22:lcd_driver.c  **** extern unsigned char gButtonTimeout;    
+  23:lcd_driver.c  **** 
+  24:lcd_driver.c  **** extern BOOL gAutoPressJoystick;
+  25:lcd_driver.c  **** 
+  26:lcd_driver.c  **** // Used to indicate when the LCD interrupt handler should update the LCD
+  27:lcd_driver.c  **** // mt jw char gLCD_Update_Required = FALSE;
+  28:lcd_driver.c  **** volatile char gLCD_Update_Required = FALSE;
+  29:lcd_driver.c  **** 
+  30:lcd_driver.c  **** // LCD display buffer (for double buffering).
+  31:lcd_driver.c  **** char LCD_Data[LCD_REGISTER_COUNT];
+  32:lcd_driver.c  **** 
+  33:lcd_driver.c  **** // Buffer that contains the text to be displayed
+  34:lcd_driver.c  **** // Note: Bit 7 indicates that this character is flashing
+  35:lcd_driver.c  **** char gTextBuffer[TEXTBUFFER_SIZE];
+  36:lcd_driver.c  **** 
+  37:lcd_driver.c  **** // Only six letters can be shown on the LCD.
+  38:lcd_driver.c  **** // With the gScroll and gScrollMode variables,
+  39:lcd_driver.c  **** // one can select which part of the buffer to show
+  40:lcd_driver.c  **** volatile signed char gScroll;
+  41:lcd_driver.c  **** volatile char gScrollMode;
+  42:lcd_driver.c  **** 
+  43:lcd_driver.c  **** ////Start-up delay before scrolling a string over the LCD
+  44:lcd_driver.c  **** char gLCD_Start_Scroll_Timer = 0;
+  45:lcd_driver.c  **** 
+  46:lcd_driver.c  **** // The gFlashTimer is used to determine the on/off
+  47:lcd_driver.c  **** // timing of flashing characters
+  48:lcd_driver.c  **** char gFlashTimer = 0;
+  49:lcd_driver.c  **** 
+  50:lcd_driver.c  **** // Turns on/off the colons on the LCD
+  51:lcd_driver.c  **** char gColon = 0;
+  52:lcd_driver.c  **** 
+  53:lcd_driver.c  **** 
+  54:lcd_driver.c  **** // Look-up table used when converting ASCII to
+  55:lcd_driver.c  **** // LCD display data (segment control)
+  56:lcd_driver.c  **** // mt __flash unsigned int LCD_character_table[] =
+  57:lcd_driver.c  **** const unsigned int LCD_character_table[] PROGMEM  =
+  58:lcd_driver.c  **** {
+  59:lcd_driver.c  ****     0x0A51,     // '*' (?)
+  60:lcd_driver.c  ****     0x2A80,     // '+'
+  61:lcd_driver.c  ****     0x0000,     // ',' (Not defined)
+  62:lcd_driver.c  ****     0x0A00,     // '-'
+  63:lcd_driver.c  ****     0x0A51,     // '.' Degree sign
+  64:lcd_driver.c  ****     0x0000,     // '/' (Not defined)
+  65:lcd_driver.c  ****     0x5559,     // '0'
+  66:lcd_driver.c  ****     0x0118,     // '1'
+  67:lcd_driver.c  ****     0x1e11,     // '2
+  68:lcd_driver.c  ****     0x1b11,     // '3
+  69:lcd_driver.c  ****     0x0b50,     // '4
+  70:lcd_driver.c  ****     0x1b41,     // '5
+  71:lcd_driver.c  ****     0x1f41,     // '6
+  72:lcd_driver.c  ****     0x0111,     // '7
+  73:lcd_driver.c  ****     0x1f51,     // '8
+  74:lcd_driver.c  ****     0x1b51,     // '9'
+  75:lcd_driver.c  ****     0x0000,     // ':' (Not defined)
+  76:lcd_driver.c  ****     0x0000,     // ';' (Not defined)
+  77:lcd_driver.c  ****     0x0000,     // '<' (Not defined)
+  78:lcd_driver.c  ****     0x0000,     // '=' (Not defined)
+  79:lcd_driver.c  ****     0x0000,     // '>' (Not defined)
+  80:lcd_driver.c  ****     0x0000,     // '?' (Not defined)
+  81:lcd_driver.c  ****     0x0000,     // '@' (Not defined)
+  82:lcd_driver.c  ****     0x0f51,     // 'A' (+ 'a')
+  83:lcd_driver.c  ****     0x3991,     // 'B' (+ 'b')
+  84:lcd_driver.c  ****     0x1441,     // 'C' (+ 'c')
+  85:lcd_driver.c  ****     0x3191,     // 'D' (+ 'd')
+  86:lcd_driver.c  ****     0x1e41,     // 'E' (+ 'e')
+  87:lcd_driver.c  ****     0x0e41,     // 'F' (+ 'f')
+  88:lcd_driver.c  ****     0x1d41,     // 'G' (+ 'g')
+  89:lcd_driver.c  ****     0x0f50,     // 'H' (+ 'h')
+  90:lcd_driver.c  ****     0x2080,     // 'I' (+ 'i')
+  91:lcd_driver.c  ****     0x1510,     // 'J' (+ 'j')
+  92:lcd_driver.c  ****     0x8648,     // 'K' (+ 'k')
+  93:lcd_driver.c  ****     0x1440,     // 'L' (+ 'l')
+  94:lcd_driver.c  ****     0x0578,     // 'M' (+ 'm')
+  95:lcd_driver.c  ****     0x8570,     // 'N' (+ 'n')
+  96:lcd_driver.c  ****     0x1551,     // 'O' (+ 'o')
+  97:lcd_driver.c  ****     0x0e51,     // 'P' (+ 'p')
+  98:lcd_driver.c  ****     0x9551,     // 'Q' (+ 'q')
+  99:lcd_driver.c  ****     0x8e51,     // 'R' (+ 'r')
+ 100:lcd_driver.c  ****     0x9021,     // 'S' (+ 's')
+ 101:lcd_driver.c  ****     0x2081,     // 'T' (+ 't')
+ 102:lcd_driver.c  ****     0x1550,     // 'U' (+ 'u')
+ 103:lcd_driver.c  ****     0x4448,     // 'V' (+ 'v')
+ 104:lcd_driver.c  ****     0xc550,     // 'W' (+ 'w')
+ 105:lcd_driver.c  ****     0xc028,     // 'X' (+ 'x')
+ 106:lcd_driver.c  ****     0x2028,     // 'Y' (+ 'y')
+ 107:lcd_driver.c  ****     0x5009,     // 'Z' (+ 'z')
+ 108:lcd_driver.c  ****     0x0000,     // '[' (Not defined)
+ 109:lcd_driver.c  ****     0x0000,     // '\' (Not defined)
+ 110:lcd_driver.c  ****     0x0000,     // ']' (Not defined)
+ 111:lcd_driver.c  ****     0x0000,     // '^' (Not defined)
+ 112:lcd_driver.c  ****     0x0000      // '_'
+ 113:lcd_driver.c  **** };
+ 114:lcd_driver.c  **** 
+ 115:lcd_driver.c  **** 
+ 116:lcd_driver.c  **** /*****************************************************************************
+ 117:lcd_driver.c  **** *
+ 118:lcd_driver.c  **** *   Function name : LCD_Init
+ 119:lcd_driver.c  **** *
+ 120:lcd_driver.c  **** *   Returns :       None
+ 121:lcd_driver.c  **** *
+ 122:lcd_driver.c  **** *   Parameters :    None
+ 123:lcd_driver.c  **** *
+ 124:lcd_driver.c  **** *   Purpose :       Initialize LCD_displayData buffer.
+ 125:lcd_driver.c  **** *                   Set up the LCD (timing, contrast, etc.)
+ 126:lcd_driver.c  **** *
+ 127:lcd_driver.c  **** *****************************************************************************/
+ 128:lcd_driver.c  **** void LCD_Init (void)
+ 129:lcd_driver.c  **** {
+ 130:lcd_driver.c  ****     LCD_AllSegments(FALSE);                     // Clear segment buffer.
+ 131:lcd_driver.c  **** 
+ 132:lcd_driver.c  ****     LCD_CONTRAST_LEVEL(LCD_INITIAL_CONTRAST);    //Set the LCD contrast level
+ 133:lcd_driver.c  **** 
+ 134:lcd_driver.c  ****     // Select asynchronous clock source, enable all COM pins and enable all
+ 135:lcd_driver.c  ****     // segment pins.
+ 136:lcd_driver.c  ****     LCDCRB = (1<<LCDCS) | (3<<LCDMUX0) | (7<<LCDPM0);
+ 137:lcd_driver.c  **** 
+ 138:lcd_driver.c  ****     // Set LCD prescaler to give a framerate of 32,0 Hz
+ 139:lcd_driver.c  ****     LCDFRR = (0<<LCDPS0) | (7<<LCDCD0);    
+ 140:lcd_driver.c  **** 
+ 141:lcd_driver.c  ****     LCDCRA = (1<<LCDEN) | (1<<LCDAB);           // Enable LCD and set low power waveform
+ 142:lcd_driver.c  **** 
+ 143:lcd_driver.c  ****     //Enable LCD start of frame interrupt
+ 144:lcd_driver.c  ****     LCDCRA |= (1<<LCDIE);
+ 145:lcd_driver.c  **** 
+ 146:lcd_driver.c  ****     gLCD_Update_Required = FALSE;
+ 147:lcd_driver.c  **** 
+ 148:lcd_driver.c  **** 
+ 149:lcd_driver.c  **** }
+ 150:lcd_driver.c  **** 
+ 151:lcd_driver.c  **** 
+ 152:lcd_driver.c  **** /*****************************************************************************
+ 153:lcd_driver.c  **** *
+ 154:lcd_driver.c  **** *   Function name : LCD_WriteDigit(char c, char digit)
+ 155:lcd_driver.c  **** *
+ 156:lcd_driver.c  **** *   Returns :       None
+ 157:lcd_driver.c  **** *
+ 158:lcd_driver.c  **** *   Parameters :    Inputs
+ 159:lcd_driver.c  **** *                   c: The symbol to be displayed in a LCD digit
+ 160:lcd_driver.c  **** *                   digit: In which digit (0-5) the symbol should be displayed
+ 161:lcd_driver.c  **** *                   Note: Digit 0 is the first used digit on the LCD,
+ 162:lcd_driver.c  **** *                   i.e LCD digit 2
+ 163:lcd_driver.c  **** *
+ 164:lcd_driver.c  **** *   Purpose :       Stores LCD control data in the LCD_displayData buffer.
+ 165:lcd_driver.c  **** *                   (The LCD_displayData is latched in the LCD_SOF interrupt.)
+ 166:lcd_driver.c  **** *
+ 167:lcd_driver.c  **** *****************************************************************************/
+ 168:lcd_driver.c  **** void LCD_WriteDigit(char c, char digit)
+ 169:lcd_driver.c  **** {
+ 115               	.LM0:
+ 116               	.LFBB1:
+ 117               	/* prologue: function */
+ 118               	/* frame size = 0 */
+ 119               	/* stack size = 0 */
+ 120               	.L__stack_usage = 0
+ 170:lcd_driver.c  **** 
+ 171:lcd_driver.c  ****     unsigned int seg = 0x0000;                  // Holds the segment pattern
+ 172:lcd_driver.c  ****     char mask, nibble;
+ 173:lcd_driver.c  ****     char *ptr;
+ 174:lcd_driver.c  ****     char i;
+ 175:lcd_driver.c  **** 
+ 176:lcd_driver.c  **** 
+ 177:lcd_driver.c  ****     if (digit > 5)                              // Skip if digit is illegal
+ 122               	.LM1:
+ 123 0000 6630      		cpi r22,lo8(6)
+ 124 0002 00F4      		brsh .L1
+ 125               	.LBB6:
+ 126               	.LBB7:
+ 178:lcd_driver.c  ****         return;
+ 179:lcd_driver.c  **** 
+ 180:lcd_driver.c  ****     //Lookup character table for segmet data
+ 181:lcd_driver.c  ****     if ((c >= '*') && (c <= 'z'))
+ 128               	.LM2:
+ 129 0004 96ED      		ldi r25,lo8(-42)
+ 130 0006 980F      		add r25,r24
+ 131 0008 9135      		cpi r25,lo8(81)
+ 132 000a 00F4      		brsh .L9
+ 182:lcd_driver.c  ****     {
+ 183:lcd_driver.c  ****         // c is a letter
+ 184:lcd_driver.c  ****         if (c >= 'a')                           // Convert to upper case
+ 134               	.LM3:
+ 135 000c 8136      		cpi r24,lo8(97)
+ 136 000e 00F0      		brlo .L4
+ 185:lcd_driver.c  ****             c &= ~0x20;                         // if necessarry
+ 138               	.LM4:
+ 139 0010 8F7D      		andi r24,lo8(-33)
+ 140               	.L4:
+ 186:lcd_driver.c  **** 
+ 187:lcd_driver.c  ****         c -= '*';
+ 142               	.LM5:
+ 143 0012 8A52      		subi r24,lo8(-(-42))
+ 144               	.LBB8:
+ 188:lcd_driver.c  **** 
+ 189:lcd_driver.c  **** 		//mt seg = LCD_character_table[c];
+ 190:lcd_driver.c  **** 		seg = (unsigned int) pgm_read_word(&LCD_character_table[(uint8_t)c]); 
+ 146               	.LM6:
+ 147 0014 90E0      		ldi r25,0
+ 148 0016 880F      		lsl r24
+ 149 0018 991F      		rol r25
+ 150 001a 8050      		subi r24,lo8(-(LCD_character_table))
+ 151 001c 9040      		sbci r25,hi8(-(LCD_character_table))
+ 152 001e FC01      		movw r30,r24
+ 153               	/* #APP */
+ 154               	 ;  190 "lcd_driver.c" 1
+ 155 0020 2591      		lpm r18, Z+
+ 156 0022 3491      		lpm r19, Z
+ 157               		
+ 158               	 ;  0 "" 2
+ 159               	/* #NOAPP */
+ 160 0024 00C0      		rjmp .L3
+ 161               	.L9:
+ 162               	.LBE8:
+ 171:lcd_driver.c  ****     unsigned int seg = 0x0000;                  // Holds the segment pattern
+ 164               	.LM7:
+ 165 0026 20E0      		ldi r18,0
+ 166 0028 30E0      		ldi r19,0
+ 167               	.L3:
+ 191:lcd_driver.c  **** 	}
+ 192:lcd_driver.c  **** 
+ 193:lcd_driver.c  ****     // Adjust mask according to LCD segment mapping
+ 194:lcd_driver.c  ****     if (digit & 0x01)
+ 169               	.LM8:
+ 170 002a A62F      		mov r26,r22
+ 171 002c A170      		andi r26,lo8(1)
+ 172 002e 60FF      		sbrs r22,0
+ 173 0030 00C0      		rjmp .L10
+ 195:lcd_driver.c  ****         mask = 0x0F;                // Digit 1, 3, 5
+ 175               	.LM9:
+ 176 0032 7FE0      		ldi r23,lo8(15)
+ 177 0034 00C0      		rjmp .L5
+ 178               	.L10:
+ 196:lcd_driver.c  ****     else
+ 197:lcd_driver.c  ****         mask = 0xF0;                // Digit 0, 2, 4
+ 180               	.LM10:
+ 181 0036 70EF      		ldi r23,lo8(-16)
+ 182               	.L5:
+ 198:lcd_driver.c  **** 
+ 199:lcd_driver.c  ****     ptr = LCD_Data + (digit >> 1);  // digit = {0,0,1,1,2,2}
+ 184               	.LM11:
+ 185 0038 6695      		lsr r22
+ 186 003a E62F      		mov r30,r22
+ 187 003c F0E0      		ldi r31,0
+ 188 003e E050      		subi r30,lo8(-(LCD_Data))
+ 189 0040 F040      		sbci r31,hi8(-(LCD_Data))
+ 190 0042 CF01      		movw r24,r30
+ 191 0044 4496      		adiw r24,20
+ 192               	.L8:
+ 200:lcd_driver.c  **** 
+ 201:lcd_driver.c  ****     for (i = 0; i < 4; i++)
+ 202:lcd_driver.c  ****     {
+ 203:lcd_driver.c  ****         nibble = seg & 0x000F;
+ 194               	.LM12:
+ 195 0046 522F      		mov r21,r18
+ 196 0048 5F70      		andi r21,lo8(15)
+ 204:lcd_driver.c  ****         seg >>= 4;
+ 198               	.LM13:
+ 199 004a 44E0      		ldi r20,4
+ 200               		1:
+ 201 004c 3695      		lsr r19
+ 202 004e 2795      		ror r18
+ 203 0050 4A95      		dec r20
+ 204 0052 01F4      		brne 1b
+ 205:lcd_driver.c  ****         if (digit & 0x01)
+ 206               	.LM14:
+ 207 0054 AA23      		tst r26
+ 208 0056 01F0      		breq .L6
+ 206:lcd_driver.c  ****             nibble <<= 4;
+ 210               	.LM15:
+ 211 0058 5295      		swap r21
+ 212 005a 507F      		andi r21,lo8(-16)
+ 213               	.L6:
+ 207:lcd_driver.c  ****         *ptr = (*ptr & mask) | nibble;
+ 215               	.LM16:
+ 216 005c 4081      		ld r20,Z
+ 217 005e 4723      		and r20,r23
+ 218 0060 452B      		or r20,r21
+ 219 0062 4083      		st Z,r20
+ 208:lcd_driver.c  ****         ptr += 5;
+ 221               	.LM17:
+ 222 0064 3596      		adiw r30,5
+ 201:lcd_driver.c  ****     for (i = 0; i < 4; i++)
+ 224               	.LM18:
+ 225 0066 E817      		cp r30,r24
+ 226 0068 F907      		cpc r31,r25
+ 227 006a 01F4      		brne .L8
+ 228               	.L1:
+ 229 006c 0895      		ret
+ 230               	.LBE7:
+ 231               	.LBE6:
+ 242               	.Lscope1:
+ 244               		.stabd	78,0,0
+ 247               	.global	LCD_AllSegments
+ 249               	LCD_AllSegments:
+ 250               		.stabd	46,0,0
+ 209:lcd_driver.c  ****     }
+ 210:lcd_driver.c  **** }
+ 211:lcd_driver.c  **** 
+ 212:lcd_driver.c  **** 
+ 213:lcd_driver.c  **** 
+ 214:lcd_driver.c  **** /*****************************************************************************
+ 215:lcd_driver.c  **** *
+ 216:lcd_driver.c  **** *   Function name : LCD_AllSegments(unsigned char input)
+ 217:lcd_driver.c  **** *
+ 218:lcd_driver.c  **** *   Returns :       None
+ 219:lcd_driver.c  **** *
+ 220:lcd_driver.c  **** *   Parameters :    show -  [TRUE;FALSE]
+ 221:lcd_driver.c  **** *
+ 222:lcd_driver.c  **** *   Purpose :       shows or hide all all LCD segments on the LCD
+ 223:lcd_driver.c  **** *
+ 224:lcd_driver.c  **** *****************************************************************************/
+ 225:lcd_driver.c  **** void LCD_AllSegments(char show)
+ 226:lcd_driver.c  **** {
+ 252               	.LM19:
+ 253               	.LFBB2:
+ 254               	/* prologue: function */
+ 255               	/* frame size = 0 */
+ 256               	/* stack size = 0 */
+ 257               	.L__stack_usage = 0
+ 227:lcd_driver.c  ****     unsigned char i;
+ 228:lcd_driver.c  **** 
+ 229:lcd_driver.c  ****     if (show)
+ 259               	.LM20:
+ 260 006e 91E0      		ldi r25,lo8(1)
+ 261 0070 8111      		cpse r24,__zero_reg__
+ 262 0072 00C0      		rjmp .L16
+ 263 0074 90E0      		ldi r25,0
+ 264               	.L16:
+ 265 0076 9195      		neg r25
+ 266 0078 E0E0      		ldi r30,lo8(LCD_Data)
+ 267 007a F0E0      		ldi r31,hi8(LCD_Data)
+ 268               	.L18:
+ 230:lcd_driver.c  ****         show = 0xFF;
+ 231:lcd_driver.c  **** 
+ 232:lcd_driver.c  ****     // Set/clear all bits in all LCD registers
+ 233:lcd_driver.c  ****     for (i=0; i < LCD_REGISTER_COUNT; i++)
+ 234:lcd_driver.c  ****         *(LCD_Data + i) = show;
+ 270               	.LM21:
+ 271 007c 9193      		st Z+,r25
+ 233:lcd_driver.c  ****     for (i=0; i < LCD_REGISTER_COUNT; i++)
+ 273               	.LM22:
+ 274 007e 80E0      		ldi r24,hi8(LCD_Data+20)
+ 275 0080 E030      		cpi r30,lo8(LCD_Data+20)
+ 276 0082 F807      		cpc r31,r24
+ 277 0084 01F4      		brne .L18
+ 278               	/* epilogue start */
+ 235:lcd_driver.c  **** }
+ 280               	.LM23:
+ 281 0086 0895      		ret
+ 283               	.Lscope2:
+ 285               		.stabd	78,0,0
+ 287               	.global	LCD_Init
+ 289               	LCD_Init:
+ 290               		.stabd	46,0,0
+ 129:lcd_driver.c  **** {
+ 292               	.LM24:
+ 293               	.LFBB3:
+ 294               	/* prologue: function */
+ 295               	/* frame size = 0 */
+ 296               	/* stack size = 0 */
+ 297               	.L__stack_usage = 0
+ 130:lcd_driver.c  ****     LCD_AllSegments(FALSE);                     // Clear segment buffer.
+ 299               	.LM25:
+ 300 0088 80E0      		ldi r24,0
+ 301 008a 0E94 0000 		call LCD_AllSegments
+ 132:lcd_driver.c  ****     LCD_CONTRAST_LEVEL(LCD_INITIAL_CONTRAST);    //Set the LCD contrast level
+ 303               	.LM26:
+ 304 008e 8FE0      		ldi r24,lo8(15)
+ 305 0090 8093 E700 		sts 231,r24
+ 136:lcd_driver.c  ****     LCDCRB = (1<<LCDCS) | (3<<LCDMUX0) | (7<<LCDPM0);
+ 307               	.LM27:
+ 308 0094 87EB      		ldi r24,lo8(-73)
+ 309 0096 8093 E500 		sts 229,r24
+ 139:lcd_driver.c  ****     LCDFRR = (0<<LCDPS0) | (7<<LCDCD0);    
+ 311               	.LM28:
+ 312 009a 87E0      		ldi r24,lo8(7)
+ 313 009c 8093 E600 		sts 230,r24
+ 141:lcd_driver.c  ****     LCDCRA = (1<<LCDEN) | (1<<LCDAB);           // Enable LCD and set low power waveform
+ 315               	.LM29:
+ 316 00a0 E4EE      		ldi r30,lo8(-28)
+ 317 00a2 F0E0      		ldi r31,0
+ 318 00a4 80EC      		ldi r24,lo8(-64)
+ 319 00a6 8083      		st Z,r24
+ 144:lcd_driver.c  ****     LCDCRA |= (1<<LCDIE);
+ 321               	.LM30:
+ 322 00a8 8081      		ld r24,Z
+ 323 00aa 8860      		ori r24,lo8(8)
+ 324 00ac 8083      		st Z,r24
+ 146:lcd_driver.c  ****     gLCD_Update_Required = FALSE;
+ 326               	.LM31:
+ 327 00ae 1092 0000 		sts gLCD_Update_Required,__zero_reg__
+ 328 00b2 0895      		ret
+ 330               	.Lscope3:
+ 332               		.stabd	78,0,0
+ 334               	.global	__vector_22
+ 336               	__vector_22:
+ 337               		.stabd	46,0,0
+ 236:lcd_driver.c  **** 
+ 237:lcd_driver.c  **** 
+ 238:lcd_driver.c  **** /*****************************************************************************
+ 239:lcd_driver.c  **** *
+ 240:lcd_driver.c  **** *   LCD Interrupt Routine
+ 241:lcd_driver.c  **** *
+ 242:lcd_driver.c  **** *   Returns :       None
+ 243:lcd_driver.c  **** *
+ 244:lcd_driver.c  **** *   Parameters :    None
+ 245:lcd_driver.c  **** *
+ 246:lcd_driver.c  **** *   Purpose: Latch the LCD_displayData and Set LCD_status.updateComplete
+ 247:lcd_driver.c  **** *
+ 248:lcd_driver.c  **** *****************************************************************************/
+ 249:lcd_driver.c  **** 
+ 250:lcd_driver.c  **** //SIGNAL(SIG_LCD)
+ 251:lcd_driver.c  **** ISR(LCD_vect, ISR_NOBLOCK)
+ 252:lcd_driver.c  **** {
+ 339               	.LM32:
+ 340               	.LFBB4:
+ 341 00b4 7894      		sei
+ 342 00b6 1F92      		push r1
+ 343 00b8 0F92      		push r0
+ 344 00ba 0FB6      		in r0,__SREG__
+ 345 00bc 0F92      		push r0
+ 346 00be 1124      		clr __zero_reg__
+ 347 00c0 FF92      		push r15
+ 348 00c2 0F93      		push r16
+ 349 00c4 1F93      		push r17
+ 350 00c6 2F93      		push r18
+ 351 00c8 3F93      		push r19
+ 352 00ca 4F93      		push r20
+ 353 00cc 5F93      		push r21
+ 354 00ce 6F93      		push r22
+ 355 00d0 7F93      		push r23
+ 356 00d2 8F93      		push r24
+ 357 00d4 9F93      		push r25
+ 358 00d6 AF93      		push r26
+ 359 00d8 BF93      		push r27
+ 360 00da CF93      		push r28
+ 361 00dc DF93      		push r29
+ 362 00de EF93      		push r30
+ 363 00e0 FF93      		push r31
+ 364               	/* prologue: Interrupt */
+ 365               	/* frame size = 0 */
+ 366               	/* stack size = 20 */
+ 367               	.L__stack_usage = 20
+ 253:lcd_driver.c  ****     static char LCD_timer = LCD_TIMER_SEED;
+ 254:lcd_driver.c  ****     char c;
+ 255:lcd_driver.c  ****     char c_flash;
+ 256:lcd_driver.c  ****     char flash;
+ 257:lcd_driver.c  **** 
+ 258:lcd_driver.c  ****     char EOL;
+ 259:lcd_driver.c  ****     unsigned char i;
+ 260:lcd_driver.c  **** 
+ 261:lcd_driver.c  **** ///!!!    static char timeout_count;
+ 262:lcd_driver.c  **** ///!!!    static char auto_joystick_count;
+ 263:lcd_driver.c  **** 	
+ 264:lcd_driver.c  **** 	c_flash=0; // mt
+ 265:lcd_driver.c  ****     
+ 266:lcd_driver.c  **** /**************** Button timeout for the button.c, START ****************/
+ 267:lcd_driver.c  **** /*!!!    if(!gButtonTimeout)
+ 268:lcd_driver.c  ****     {
+ 269:lcd_driver.c  ****         timeout_count++;
+ 270:lcd_driver.c  ****         
+ 271:lcd_driver.c  ****         if(timeout_count > 3)
+ 272:lcd_driver.c  ****         {
+ 273:lcd_driver.c  ****             gButtonTimeout = TRUE;
+ 274:lcd_driver.c  ****             timeout_count = 0;
+ 275:lcd_driver.c  ****         }
+ 276:lcd_driver.c  ****     }
+ 277:lcd_driver.c  **** */
+ 278:lcd_driver.c  **** /**************** Button timeout for the button.c, END ******************/
+ 279:lcd_driver.c  **** 
+ 280:lcd_driver.c  **** /**************** Auto press joystick for the main.c, START *************/
+ 281:lcd_driver.c  **** 
+ 282:lcd_driver.c  **** /*!!!    if(gAutoPressJoystick == AUTO)
+ 283:lcd_driver.c  ****     {
+ 284:lcd_driver.c  ****         auto_joystick_count++;
+ 285:lcd_driver.c  ****         
+ 286:lcd_driver.c  ****         if(auto_joystick_count > 16)
+ 287:lcd_driver.c  ****         {
+ 288:lcd_driver.c  ****             gAutoPressJoystick = TRUE;
+ 289:lcd_driver.c  ****             auto_joystick_count = 15;
+ 290:lcd_driver.c  ****         }
+ 291:lcd_driver.c  ****     }
+ 292:lcd_driver.c  ****     else
+ 293:lcd_driver.c  ****         auto_joystick_count = 0;
+ 294:lcd_driver.c  **** */
+ 295:lcd_driver.c  **** 
+ 296:lcd_driver.c  **** /**************** Auto press joystick for the main.c, END ***************/    
+ 297:lcd_driver.c  **** 
+ 298:lcd_driver.c  ****     LCD_timer--;                    // Decreased every LCD frame
+ 369               	.LM33:
+ 370 00e2 8091 0000 		lds r24,LCD_timer.1709
+ 371 00e6 8150      		subi r24,lo8(-(-1))
+ 372 00e8 8093 0000 		sts LCD_timer.1709,r24
+ 299:lcd_driver.c  **** 
+ 300:lcd_driver.c  ****     if (gScrollMode)
+ 374               	.LM34:
+ 375 00ec 9091 0000 		lds r25,gScrollMode
+ 376 00f0 9923      		tst r25
+ 377 00f2 01F0      		breq .L21
+ 301:lcd_driver.c  ****     {
+ 302:lcd_driver.c  ****         // If we are in scroll mode, and the timer has expired,
+ 303:lcd_driver.c  ****         // we will update the LCD
+ 304:lcd_driver.c  ****         if (LCD_timer == 0)
+ 379               	.LM35:
+ 380 00f4 8111      		cpse r24,__zero_reg__
+ 381 00f6 00C0      		rjmp .L22
+ 305:lcd_driver.c  ****         {
+ 306:lcd_driver.c  ****             if (gLCD_Start_Scroll_Timer == 0)
+ 383               	.LM36:
+ 384 00f8 8091 0000 		lds r24,gLCD_Start_Scroll_Timer
+ 385 00fc 8111      		cpse r24,__zero_reg__
+ 386 00fe 00C0      		rjmp .L23
+ 307:lcd_driver.c  ****             {
+ 308:lcd_driver.c  ****                 gLCD_Update_Required = TRUE;
+ 388               	.LM37:
+ 389 0100 81E0      		ldi r24,lo8(1)
+ 390 0102 8093 0000 		sts gLCD_Update_Required,r24
+ 391 0106 00C0      		rjmp .L22
+ 392               	.L23:
+ 309:lcd_driver.c  ****             }
+ 310:lcd_driver.c  ****             else
+ 311:lcd_driver.c  ****                 gLCD_Start_Scroll_Timer--;
+ 394               	.LM38:
+ 395 0108 8150      		subi r24,lo8(-(-1))
+ 396 010a 8093 0000 		sts gLCD_Start_Scroll_Timer,r24
+ 397 010e 00C0      		rjmp .L22
+ 398               	.L21:
+ 312:lcd_driver.c  ****         }
+ 313:lcd_driver.c  ****     }
+ 314:lcd_driver.c  ****     else    
+ 315:lcd_driver.c  ****     {   // if not scrolling,
+ 316:lcd_driver.c  ****         // disble LCD start of frame interrupt
+ 317:lcd_driver.c  **** //        cbi(LCDCRA, LCDIE);   //DEBUG
+ 318:lcd_driver.c  ****         gScroll = 0;
+ 400               	.LM39:
+ 401 0110 1092 0000 		sts gScroll,__zero_reg__
+ 402               	.L22:
+ 319:lcd_driver.c  ****     }
+ 320:lcd_driver.c  **** 
+ 321:lcd_driver.c  **** 
+ 322:lcd_driver.c  ****     EOL = FALSE;
+ 323:lcd_driver.c  ****     if (gLCD_Update_Required == TRUE)
+ 404               	.LM40:
+ 405 0114 8091 0000 		lds r24,gLCD_Update_Required
+ 406 0118 8130      		cpi r24,lo8(1)
+ 407 011a 01F0      		breq .+2
+ 408 011c 00C0      		rjmp .L24
+ 324:lcd_driver.c  ****     {
+ 325:lcd_driver.c  ****         // Duty cycle of flashing characters
+ 326:lcd_driver.c  ****         if (gFlashTimer < (LCD_FLASH_SEED >> 1))
+ 410               	.LM41:
+ 411 011e F090 0000 		lds r15,gFlashTimer
+ 412 0122 C0E0      		ldi r28,0
+ 413 0124 D0E0      		ldi r29,0
+ 322:lcd_driver.c  ****     EOL = FALSE;
+ 415               	.LM42:
+ 416 0126 10E0      		ldi r17,0
+ 264:lcd_driver.c  **** 	c_flash=0; // mt
+ 418               	.LM43:
+ 419 0128 00E0      		ldi r16,0
+ 420               	.L29:
+ 421 012a 6C2F      		mov r22,r28
+ 327:lcd_driver.c  ****             flash = 0;
+ 328:lcd_driver.c  ****         else
+ 329:lcd_driver.c  ****             flash = 1;
+ 330:lcd_driver.c  **** 
+ 331:lcd_driver.c  ****         // Repeat for the six LCD characters
+ 332:lcd_driver.c  ****         for (i = 0; i < 6; i++)
+ 333:lcd_driver.c  ****         {
+ 334:lcd_driver.c  ****             if ((gScroll+i) >= 0 && (!EOL))
+ 423               	.LM44:
+ 424 012c 8091 0000 		lds r24,gScroll
+ 425 0130 9E01      		movw r18,r28
+ 426 0132 280F      		add r18,r24
+ 427 0134 311D      		adc r19,__zero_reg__
+ 428 0136 87FD      		sbrc r24,7
+ 429 0138 3A95      		dec r19
+ 430 013a 37FD      		sbrc r19,7
+ 431 013c 00C0      		rjmp .L40
+ 433               	.LM45:
+ 434 013e 1111      		cpse r17,__zero_reg__
+ 435 0140 00C0      		rjmp .L40
+ 335:lcd_driver.c  ****             {
+ 336:lcd_driver.c  ****                 // We have some visible characters
+ 337:lcd_driver.c  ****                 c = gTextBuffer[i + gScroll];
+ 437               	.LM46:
+ 438 0142 8091 0000 		lds r24,gScroll
+ 439 0146 FE01      		movw r30,r28
+ 440 0148 E050      		subi r30,lo8(-(gTextBuffer))
+ 441 014a F040      		sbci r31,hi8(-(gTextBuffer))
+ 442 014c E80F      		add r30,r24
+ 443 014e F11D      		adc r31,__zero_reg__
+ 444 0150 87FD      		sbrc r24,7
+ 445 0152 FA95      		dec r31
+ 446 0154 8081      		ld r24,Z
+ 338:lcd_driver.c  ****                 c_flash = c & 0x80 ? 1 : 0;
+ 448               	.LM47:
+ 449 0156 082F      		mov r16,r24
+ 450 0158 001F      		rol r16
+ 451 015a 0027      		clr r16
+ 452 015c 001F      		rol r16
+ 339:lcd_driver.c  ****                 c = c & 0x7F;
+ 454               	.LM48:
+ 455 015e 8F77      		andi r24,lo8(127)
+ 340:lcd_driver.c  **** 
+ 341:lcd_driver.c  ****                 if (c == '\0')
+ 457               	.LM49:
+ 458 0160 01F4      		brne .L25
+ 459 0162 11E0      		ldi r17,lo8(1)
+ 460 0164 1C0F      		add r17,r28
+ 461 0166 00C0      		rjmp .L25
+ 462               	.L40:
+ 342:lcd_driver.c  ****                     EOL = i+1;      // End of character data
+ 343:lcd_driver.c  ****             }
+ 344:lcd_driver.c  ****             else
+ 345:lcd_driver.c  ****                 c = ' ';
+ 464               	.LM50:
+ 465 0168 80E2      		ldi r24,lo8(32)
+ 466               	.L25:
+ 346:lcd_driver.c  **** 
+ 347:lcd_driver.c  ****             // Check if this character is flashing
+ 348:lcd_driver.c  **** 
+ 349:lcd_driver.c  ****             if (c_flash && flash)
+ 468               	.LM51:
+ 469 016a 0023      		tst r16
+ 470 016c 01F0      		breq .L26
+ 472               	.LM52:
+ 473 016e 34E0      		ldi r19,lo8(4)
+ 474 0170 3F15      		cp r19,r15
+ 475 0172 00F4      		brsh .L26
+ 350:lcd_driver.c  ****                 LCD_WriteDigit(' ', i);
+ 477               	.LM53:
+ 478 0174 80E2      		ldi r24,lo8(32)
+ 479               	.L26:
+ 351:lcd_driver.c  ****             else
+ 352:lcd_driver.c  ****                 LCD_WriteDigit(c, i);
+ 481               	.LM54:
+ 482 0176 0E94 0000 		call LCD_WriteDigit
+ 483 017a 2196      		adiw r28,1
+ 332:lcd_driver.c  ****         for (i = 0; i < 6; i++)
+ 485               	.LM55:
+ 486 017c C630      		cpi r28,6
+ 487 017e D105      		cpc r29,__zero_reg__
+ 488 0180 01F4      		brne .L29
+ 489 0182 A0E0      		ldi r26,lo8(LCD_Data)
+ 490 0184 B0E0      		ldi r27,hi8(LCD_Data)
+ 491 0186 ECEE      		ldi r30,lo8(-20)
+ 492 0188 F0E0      		ldi r31,0
+ 493               	.L31:
+ 353:lcd_driver.c  ****         }
+ 354:lcd_driver.c  **** 
+ 355:lcd_driver.c  ****         // Copy the segment buffer to the real segments
+ 356:lcd_driver.c  ****         for (i = 0; i < LCD_REGISTER_COUNT; i++)
+ 357:lcd_driver.c  ****             *(pLCDREG + i) = *(LCD_Data+i);
+ 495               	.LM56:
+ 496 018a 8D91      		ld r24,X+
+ 497 018c 8193      		st Z+,r24
+ 356:lcd_driver.c  ****         for (i = 0; i < LCD_REGISTER_COUNT; i++)
+ 499               	.LM57:
+ 500 018e E115      		cp r30,__zero_reg__
+ 501 0190 81E0      		ldi r24,1
+ 502 0192 F807      		cpc r31,r24
+ 503 0194 01F4      		brne .L31
+ 358:lcd_driver.c  **** 
+ 359:lcd_driver.c  ****         // Handle colon
+ 360:lcd_driver.c  ****         if (gColon)
+ 505               	.LM58:
+ 506 0196 8091 0000 		lds r24,gColon
+ 507 019a 8823      		tst r24
+ 508 019c 01F0      		breq .L32
+ 361:lcd_driver.c  ****             *(pLCDREG + 8) = 0x01;
+ 510               	.LM59:
+ 511 019e 81E0      		ldi r24,lo8(1)
+ 512 01a0 8093 F400 		sts 244,r24
+ 513 01a4 00C0      		rjmp .L33
+ 514               	.L32:
+ 362:lcd_driver.c  ****         else
+ 363:lcd_driver.c  ****             *(pLCDREG + 8) = 0x00;
+ 516               	.LM60:
+ 517 01a6 1092 F400 		sts 244,__zero_reg__
+ 518               	.L33:
+ 364:lcd_driver.c  **** 
+ 365:lcd_driver.c  ****         // If the text scrolled off the display,
+ 366:lcd_driver.c  ****         // we have to start over again.
+ 367:lcd_driver.c  ****         if (EOL == 1)
+ 520               	.LM61:
+ 521 01aa 1130      		cpi r17,lo8(1)
+ 522 01ac 01F4      		brne .L34
+ 368:lcd_driver.c  ****             gScroll = -6;
+ 524               	.LM62:
+ 525 01ae 8AEF      		ldi r24,lo8(-6)
+ 526 01b0 00C0      		rjmp .L44
+ 527               	.L34:
+ 369:lcd_driver.c  ****         else
+ 370:lcd_driver.c  ****             gScroll++;
+ 529               	.LM63:
+ 530 01b2 8091 0000 		lds r24,gScroll
+ 531 01b6 8F5F      		subi r24,lo8(-(1))
+ 532               	.L44:
+ 533 01b8 8093 0000 		sts gScroll,r24
+ 371:lcd_driver.c  **** 
+ 372:lcd_driver.c  ****         // No need to update anymore
+ 373:lcd_driver.c  ****         gLCD_Update_Required = FALSE;
+ 535               	.LM64:
+ 536 01bc 1092 0000 		sts gLCD_Update_Required,__zero_reg__
+ 537               	.L24:
+ 374:lcd_driver.c  ****     }
+ 375:lcd_driver.c  **** 
+ 376:lcd_driver.c  **** 
+ 377:lcd_driver.c  ****     // LCD_timer is used when scrolling text
+ 378:lcd_driver.c  ****     if (LCD_timer == 0)
+ 539               	.LM65:
+ 540 01c0 8091 0000 		lds r24,LCD_timer.1709
+ 541 01c4 8111      		cpse r24,__zero_reg__
+ 542 01c6 00C0      		rjmp .L36
+ 379:lcd_driver.c  ****     {
+ 380:lcd_driver.c  **** /*        if ((gScroll <= 0) || EOL)
+ 381:lcd_driver.c  ****             LCD_timer = LCD_TIMER_SEED/2;
+ 382:lcd_driver.c  ****         else*/
+ 383:lcd_driver.c  ****             LCD_timer = LCD_TIMER_SEED;
+ 544               	.LM66:
+ 545 01c8 83E0      		ldi r24,lo8(3)
+ 546 01ca 8093 0000 		sts LCD_timer.1709,r24
+ 547               	.L36:
+ 384:lcd_driver.c  ****     }
+ 385:lcd_driver.c  **** 
+ 386:lcd_driver.c  ****     // gFlashTimer is used when flashing characters
+ 387:lcd_driver.c  ****     if (gFlashTimer == LCD_FLASH_SEED)
+ 549               	.LM67:
+ 550 01ce 8091 0000 		lds r24,gFlashTimer
+ 551 01d2 8A30      		cpi r24,lo8(10)
+ 552 01d4 01F4      		brne .L37
+ 388:lcd_driver.c  ****         gFlashTimer= 0;
+ 554               	.LM68:
+ 555 01d6 1092 0000 		sts gFlashTimer,__zero_reg__
+ 556 01da 00C0      		rjmp .L20
+ 557               	.L37:
+ 389:lcd_driver.c  ****     else
+ 390:lcd_driver.c  ****         gFlashTimer++;
+ 559               	.LM69:
+ 560 01dc 8F5F      		subi r24,lo8(-(1))
+ 561 01de 8093 0000 		sts gFlashTimer,r24
+ 562               	.L20:
+ 563               	/* epilogue start */
+ 391:lcd_driver.c  **** 
+ 392:lcd_driver.c  **** }
+ 565               	.LM70:
+ 566 01e2 FF91      		pop r31
+ 567 01e4 EF91      		pop r30
+ 568 01e6 DF91      		pop r29
+ 569 01e8 CF91      		pop r28
+ 570 01ea BF91      		pop r27
+ 571 01ec AF91      		pop r26
+ 572 01ee 9F91      		pop r25
+ 573 01f0 8F91      		pop r24
+ 574 01f2 7F91      		pop r23
+ 575 01f4 6F91      		pop r22
+ 576 01f6 5F91      		pop r21
+ 577 01f8 4F91      		pop r20
+ 578 01fa 3F91      		pop r19
+ 579 01fc 2F91      		pop r18
+ 580 01fe 1F91      		pop r17
+ 581 0200 0F91      		pop r16
+ 582 0202 FF90      		pop r15
+ 583 0204 0F90      		pop r0
+ 584 0206 0FBE      		out __SREG__,r0
+ 585 0208 0F90      		pop r0
+ 586 020a 1F90      		pop r1
+ 587 020c 1895      		reti
+ 595               	.Lscope4:
+ 597               		.stabd	78,0,0
+ 598               		.data
+ 601               	LCD_timer.1709:
+ 602 0000 03        		.byte	3
+ 603               	.global	LCD_character_table
+ 604               		.section	.progmem.data,"a",@progbits
+ 607               	LCD_character_table:
+ 608 0000 510A      		.word	2641
+ 609 0002 802A      		.word	10880
+ 610 0004 0000      		.word	0
+ 611 0006 000A      		.word	2560
+ 612 0008 510A      		.word	2641
+ 613 000a 0000      		.word	0
+ 614 000c 5955      		.word	21849
+ 615 000e 1801      		.word	280
+ 616 0010 111E      		.word	7697
+ 617 0012 111B      		.word	6929
+ 618 0014 500B      		.word	2896
+ 619 0016 411B      		.word	6977
+ 620 0018 411F      		.word	8001
+ 621 001a 1101      		.word	273
+ 622 001c 511F      		.word	8017
+ 623 001e 511B      		.word	6993
+ 624 0020 0000      		.word	0
+ 625 0022 0000      		.word	0
+ 626 0024 0000      		.word	0
+ 627 0026 0000      		.word	0
+ 628 0028 0000      		.word	0
+ 629 002a 0000      		.word	0
+ 630 002c 0000      		.word	0
+ 631 002e 510F      		.word	3921
+ 632 0030 9139      		.word	14737
+ 633 0032 4114      		.word	5185
+ 634 0034 9131      		.word	12689
+ 635 0036 411E      		.word	7745
+ 636 0038 410E      		.word	3649
+ 637 003a 411D      		.word	7489
+ 638 003c 500F      		.word	3920
+ 639 003e 8020      		.word	8320
+ 640 0040 1015      		.word	5392
+ 641 0042 4886      		.word	-31160
+ 642 0044 4014      		.word	5184
+ 643 0046 7805      		.word	1400
+ 644 0048 7085      		.word	-31376
+ 645 004a 5115      		.word	5457
+ 646 004c 510E      		.word	3665
+ 647 004e 5195      		.word	-27311
+ 648 0050 518E      		.word	-29103
+ 649 0052 2190      		.word	-28639
+ 650 0054 8120      		.word	8321
+ 651 0056 5015      		.word	5456
+ 652 0058 4844      		.word	17480
+ 653 005a 50C5      		.word	-15024
+ 654 005c 28C0      		.word	-16344
+ 655 005e 2820      		.word	8232
+ 656 0060 0950      		.word	20489
+ 657 0062 0000      		.word	0
+ 658 0064 0000      		.word	0
+ 659 0066 0000      		.word	0
+ 660 0068 0000      		.word	0
+ 661 006a 0000      		.word	0
+ 662               	.global	gColon
+ 663               		.section .bss
+ 666               	gColon:
+ 667 0000 00        		.zero	1
+ 668               	.global	gFlashTimer
+ 671               	gFlashTimer:
+ 672 0001 00        		.zero	1
+ 673               	.global	gLCD_Start_Scroll_Timer
+ 676               	gLCD_Start_Scroll_Timer:
+ 677 0002 00        		.zero	1
+ 678               		.comm	gScrollMode,1,1
+ 679               		.comm	gScroll,1,1
+ 680               		.comm	gTextBuffer,25,1
+ 681               		.comm	LCD_Data,20,1
+ 682               	.global	gLCD_Update_Required
+ 685               	gLCD_Update_Required:
+ 686 0003 00        		.zero	1
+ 696               		.text
+ 698               	.Letext0:
+ 699               		.ident	"GCC: (GNU) 4.8.2"
+ 700               	.global __do_copy_data
+ 701               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 lcd_driver.c
+     /tmp/cc8nYNTh.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cc8nYNTh.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cc8nYNTh.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cc8nYNTh.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cc8nYNTh.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cc8nYNTh.s:112    .text:0000000000000000 LCD_WriteDigit
+     /tmp/cc8nYNTh.s:607    .progmem.data:0000000000000000 LCD_character_table
+                            *COM*:0000000000000014 LCD_Data
+     /tmp/cc8nYNTh.s:249    .text:000000000000006e LCD_AllSegments
+     /tmp/cc8nYNTh.s:289    .text:0000000000000088 LCD_Init
+     /tmp/cc8nYNTh.s:685    .bss:0000000000000003 gLCD_Update_Required
+     /tmp/cc8nYNTh.s:336    .text:00000000000000b4 __vector_22
+     /tmp/cc8nYNTh.s:601    .data:0000000000000000 LCD_timer.1709
+                            *COM*:0000000000000001 gScrollMode
+     /tmp/cc8nYNTh.s:676    .bss:0000000000000002 gLCD_Start_Scroll_Timer
+                            *COM*:0000000000000001 gScroll
+     /tmp/cc8nYNTh.s:671    .bss:0000000000000001 gFlashTimer
+                            *COM*:0000000000000019 gTextBuffer
+     /tmp/cc8nYNTh.s:666    .bss:0000000000000000 gColon
+
+UNDEFINED SYMBOLS
+__do_copy_data
+__do_clear_bss

@@ -1,0 +1,1535 @@
+   1               		.file	"main.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   9               		.text
+  10               	.Ltext0:
+ 123               	.global	__floatunsisf
+ 124               	.global	__addsf3
+ 125               	.global	__fixunssfsi
+ 127               	.global	__vector_11
+ 129               	__vector_11:
+ 130               		.stabd	46,0,0
+   1:main.c        **** /* Name: main.c
+   2:main.c        ****  * Author: Delroy Hiebert
+   3:main.c        ****  */
+   4:main.c        **** #include <main.h>
+   5:main.c        **** 
+   6:main.c        **** //uint16_t keyslist[] = { C_4, C_4, G_4, G_4, A_4, A_4, G_4, F_4, F_4, E_4, E_4, D_4, D_4, C_4, G_4
+   7:main.c        **** //int noteslist[] = { q, q, q, q, q, q, h, q, q, q, q, q, q, h, q, q, q, q, q, q, h, q, q, q, q, q,
+   8:main.c        **** uint16_t keyslist[] = {FS_4, rest, A_4, FS_4, FS_4, B_4, FS_4, E_4, FS_4, rest, CS_5, FS_4, FS_4, D
+   9:main.c        **** uint8_t noteslist[] = {eigth, eigth, edot, eigth, sixteenth, eigth, eigth, eigth, eigth, eigth, edo
+  10:main.c        **** 
+  11:main.c        **** volatile uint16_t note_timer;
+  12:main.c        **** volatile uint16_t attack, decay, sustain, release;
+  13:main.c        **** volatile uint8_t state;
+  14:main.c        **** volatile uint16_t increment;
+  15:main.c        **** volatile uint16_t volume_counter;
+  16:main.c        **** volatile uint16_t note_amplitude;
+  17:main.c        **** 
+  18:main.c        **** jmp_buf task1_jb;
+  19:main.c        **** jmp_buf task2_jb;
+  20:main.c        **** jmp_buf task3_jb;
+  21:main.c        **** jmp_buf task4_jb;
+  22:main.c        **** 
+  23:main.c        **** ISR(TIMER0_OVF_vect) {
+ 132               	.LM0:
+ 133               	.LFBB1:
+ 134 0000 1F92      		push r1
+ 135 0002 0F92      		push r0
+ 136 0004 0FB6      		in r0,__SREG__
+ 137 0006 0F92      		push r0
+ 138 0008 1124      		clr __zero_reg__
+ 139 000a 2F93      		push r18
+ 140 000c 3F93      		push r19
+ 141 000e 4F93      		push r20
+ 142 0010 5F93      		push r21
+ 143 0012 6F93      		push r22
+ 144 0014 7F93      		push r23
+ 145 0016 8F93      		push r24
+ 146 0018 9F93      		push r25
+ 147 001a AF93      		push r26
+ 148 001c BF93      		push r27
+ 149 001e EF93      		push r30
+ 150 0020 FF93      		push r31
+ 151               	/* prologue: Signal */
+ 152               	/* frame size = 0 */
+ 153               	/* stack size = 15 */
+ 154               	.L__stack_usage = 15
+  24:main.c        **** 
+  25:main.c        ****   note_timer += interrupt;
+ 156               	.LM1:
+ 157 0022 6091 0000 		lds r22,note_timer
+ 158 0026 7091 0000 		lds r23,note_timer+1
+ 159 002a 80E0      		ldi r24,0
+ 160 002c 90E0      		ldi r25,0
+ 161 002e 0E94 0000 		call __floatunsisf
+ 162 0032 2FE6      		ldi r18,lo8(111)
+ 163 0034 32E1      		ldi r19,lo8(18)
+ 164 0036 43E0      		ldi r20,lo8(3)
+ 165 0038 52E4      		ldi r21,lo8(66)
+ 166 003a 0E94 0000 		call __addsf3
+ 167 003e 0E94 0000 		call __fixunssfsi
+ 168 0042 7093 0000 		sts note_timer+1,r23
+ 169 0046 6093 0000 		sts note_timer,r22
+  26:main.c        ****   switch( state )
+ 171               	.LM2:
+ 172 004a 8091 0000 		lds r24,state
+ 173 004e 8130      		cpi r24,lo8(1)
+ 174 0050 01F0      		breq .L6
+ 175 0052 00F0      		brlo .L4
+ 176 0054 8230      		cpi r24,lo8(2)
+ 177 0056 01F0      		breq .L5
+ 178 0058 8330      		cpi r24,lo8(3)
+ 179 005a 01F0      		breq .L6
+ 180 005c 00C0      		rjmp .L1
+ 181               	.L4:
+  27:main.c        ****   {
+  28:main.c        ****     case 0:
+  29:main.c        ****             volume_counter += increment;
+ 183               	.LM3:
+ 184 005e 2091 0000 		lds r18,volume_counter
+ 185 0062 3091 0000 		lds r19,volume_counter+1
+ 186 0066 8091 0000 		lds r24,increment
+ 187 006a 9091 0000 		lds r25,increment+1
+ 188 006e 820F      		add r24,r18
+ 189 0070 931F      		adc r25,r19
+ 190 0072 00C0      		rjmp .L7
+ 191               	.L5:
+  30:main.c        ****             OCR1A = volume_counter;//(( note_timer / attack ) * note_amplitude);
+  31:main.c        ****             break;
+  32:main.c        ****     case 1:
+  33:main.c        ****             volume_counter -= increment;
+  34:main.c        ****             OCR1A = volume_counter;//( note_amplitude - ((note_timer / decay) * ( 0.3 * note_amplit
+  35:main.c        ****             break;
+  36:main.c        ****     case 2:
+  37:main.c        ****             asm volatile("nop"::);
+ 193               	.LM4:
+ 194               	/* #APP */
+ 195               	 ;  37 "main.c" 1
+ 196 0074 0000      		nop
+ 197               	 ;  0 "" 2
+  38:main.c        ****             break;
+ 199               	.LM5:
+ 200               	/* #NOAPP */
+ 201 0076 00C0      		rjmp .L1
+ 202               	.L6:
+  39:main.c        ****     case 3:
+  40:main.c        ****             volume_counter -= increment;
+ 204               	.LM6:
+ 205 0078 8091 0000 		lds r24,volume_counter
+ 206 007c 9091 0000 		lds r25,volume_counter+1
+ 207 0080 2091 0000 		lds r18,increment
+ 208 0084 3091 0000 		lds r19,increment+1
+ 209 0088 821B      		sub r24,r18
+ 210 008a 930B      		sbc r25,r19
+ 211               	.L7:
+ 212 008c 9093 0000 		sts volume_counter+1,r25
+ 213 0090 8093 0000 		sts volume_counter,r24
+  41:main.c        ****             OCR1A = volume_counter;//( (1 - (note_timer / release)) * OCR1A);
+ 215               	.LM7:
+ 216 0094 8091 0000 		lds r24,volume_counter
+ 217 0098 9091 0000 		lds r25,volume_counter+1
+ 218 009c 9093 8900 		sts 136+1,r25
+ 219 00a0 8093 8800 		sts 136,r24
+ 220               	.L1:
+ 221               	/* epilogue start */
+  42:main.c        ****             break;
+  43:main.c        ****   }
+  44:main.c        **** }
+ 223               	.LM8:
+ 224 00a4 FF91      		pop r31
+ 225 00a6 EF91      		pop r30
+ 226 00a8 BF91      		pop r27
+ 227 00aa AF91      		pop r26
+ 228 00ac 9F91      		pop r25
+ 229 00ae 8F91      		pop r24
+ 230 00b0 7F91      		pop r23
+ 231 00b2 6F91      		pop r22
+ 232 00b4 5F91      		pop r21
+ 233 00b6 4F91      		pop r20
+ 234 00b8 3F91      		pop r19
+ 235 00ba 2F91      		pop r18
+ 236 00bc 0F90      		pop r0
+ 237 00be 0FBE      		out __SREG__,r0
+ 238 00c0 0F90      		pop r0
+ 239 00c2 1F90      		pop r1
+ 240 00c4 1895      		reti
+ 242               	.Lscope1:
+ 244               		.stabd	78,0,0
+ 246               	.global	displayTimer
+ 248               	displayTimer:
+ 249               		.stabd	46,0,0
+  45:main.c        **** 
+  46:main.c        **** int main(void)
+  47:main.c        **** {
+  48:main.c        ****   cli();
+  49:main.c        ****   InitButterfly();
+  50:main.c        ****   LCD_Init();
+  51:main.c        ****   //Uncomment this line if using the timer driven play_note_timer method
+  52:main.c        ****   //InitTimer0( ( ( 1 << CS02 ) | ( 0 << CS01 ) | ( 0 << CS00 ) ) );
+  53:main.c        ****   InitSound();
+  54:main.c        ****   sei();
+  55:main.c        ****     
+  56:main.c        ****   for(;;)
+  57:main.c        ****     {
+  58:main.c        ****       task1();
+  59:main.c        ****     }
+  60:main.c        ****   return 0;   /* never reached */
+  61:main.c        **** }
+  62:main.c        **** 
+  63:main.c        **** void task1()
+  64:main.c        **** {
+  65:main.c        ****   for(;;)
+  66:main.c        ****   {
+  67:main.c        ****     if( setjmp( task1_jb) == 0 )
+  68:main.c        ****     {
+  69:main.c        ****       task2_tramp();
+  70:main.c        ****     }
+  71:main.c        ****     else
+  72:main.c        ****     {
+  73:main.c        ****       playSong();
+  74:main.c        ****       longjmp( task2_jb, 1 );
+  75:main.c        ****     }
+  76:main.c        ****   }
+  77:main.c        **** }
+  78:main.c        **** 
+  79:main.c        **** void task2_tramp()
+  80:main.c        **** {
+  81:main.c        ****   uint8_t hole[32];
+  82:main.c        ****   int i = 0;
+  83:main.c        ****   for( i; i < sizeof(hole)/sizeof(hole[0]); ++i )
+  84:main.c        ****   {
+  85:main.c        ****     hole[i] = i;
+  86:main.c        ****   }
+  87:main.c        ****   task2();
+  88:main.c        **** }
+  89:main.c        **** 
+  90:main.c        **** void task2()
+  91:main.c        **** {
+  92:main.c        ****   if( setjmp( task2_jb ) == 0 )
+  93:main.c        ****   {
+  94:main.c        ****     longjmp( task1_jb, 2 );
+  95:main.c        ****   }
+  96:main.c        ****   else
+  97:main.c        ****   {
+  98:main.c        ****     displayTimer();
+  99:main.c        ****     longjmp( task1_jb, 1 );
+ 100:main.c        ****   }
+ 101:main.c        **** }
+ 102:main.c        **** 
+ 103:main.c        **** void displayTimer()
+ 104:main.c        **** {
+ 251               	.LM9:
+ 252               	.LFBB2:
+ 253 00c6 0F93      		push r16
+ 254 00c8 1F93      		push r17
+ 255 00ca CF93      		push r28
+ 256 00cc DF93      		push r29
+ 257 00ce 00D0      		rcall .
+ 258 00d0 00D0      		rcall .
+ 259 00d2 1F92      		push __zero_reg__
+ 260 00d4 CDB7      		in r28,__SP_L__
+ 261 00d6 DEB7      		in r29,__SP_H__
+ 262               	/* prologue: function */
+ 263               	/* frame size = 5 */
+ 264               	/* stack size = 9 */
+ 265               	.L__stack_usage = 9
+ 105:main.c        ****   int counter = 180;
+ 106:main.c        ****   int i = counter;
+ 267               	.LM10:
+ 268 00d8 04EB      		ldi r16,lo8(-76)
+ 269 00da 10E0      		ldi r17,0
+ 270               	.L11:
+ 271               	.LBB18:
+ 107:main.c        ****   char num[5];
+ 108:main.c        **** 
+ 109:main.c        ****   for( i; i >= 0; i-- )
+ 110:main.c        ****   {
+ 111:main.c        ****     itoa( i, num, 10 );
+ 273               	.LM11:
+ 274 00dc 4AE0      		ldi r20,lo8(10)
+ 275 00de 50E0      		ldi r21,0
+ 276 00e0 BE01      		movw r22,r28
+ 277 00e2 6F5F      		subi r22,-1
+ 278 00e4 7F4F      		sbci r23,-1
+ 279 00e6 C801      		movw r24,r16
+ 280 00e8 0E94 0000 		call itoa
+ 112:main.c        ****     LCD_puts( num, 0 );
+ 282               	.LM12:
+ 283 00ec 60E0      		ldi r22,0
+ 284 00ee CE01      		movw r24,r28
+ 285 00f0 0196      		adiw r24,1
+ 286 00f2 0E94 0000 		call LCD_puts
+ 287               	.LBB19:
+ 288               	.LBB20:
+ 290               	.Ltext1:
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id: delay.h.in 2251 2011-09-14 08:20:33Z joerg_wunsch $ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/lib/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/lib/avr/include/util/delay.h **** #endif
+  41:/usr/lib/avr/include/util/delay.h **** 
+  42:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/lib/avr/include/util/delay.h **** 
+  46:/usr/lib/avr/include/util/delay.h **** /** \file */
+  47:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/lib/avr/include/util/delay.h ****     \code
+  49:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/lib/avr/include/util/delay.h ****     \endcode
+  53:/usr/lib/avr/include/util/delay.h **** 
+  54:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/lib/avr/include/util/delay.h ****     used.
+  58:/usr/lib/avr/include/util/delay.h **** 
+  59:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/lib/avr/include/util/delay.h **** 
+  68:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/lib/avr/include/util/delay.h **** 
+  77:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/lib/avr/include/util/delay.h **** 
+  81:/usr/lib/avr/include/util/delay.h **** */
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/lib/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/lib/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/lib/avr/include/util/delay.h **** #endif
+  87:/usr/lib/avr/include/util/delay.h **** 
+  88:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/lib/avr/include/util/delay.h **** #endif
+  93:/usr/lib/avr/include/util/delay.h **** 
+  94:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/lib/avr/include/util/delay.h **** #endif
+  97:/usr/lib/avr/include/util/delay.h **** 
+  98:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/lib/avr/include/util/delay.h **** #endif
+ 103:/usr/lib/avr/include/util/delay.h **** 
+ 104:/usr/lib/avr/include/util/delay.h **** /**
+ 105:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/lib/avr/include/util/delay.h **** 
+ 107:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/lib/avr/include/util/delay.h **** 
+ 109:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/lib/avr/include/util/delay.h **** 
+ 112:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/lib/avr/include/util/delay.h **** 
+ 114:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/lib/avr/include/util/delay.h **** 
+ 120:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/lib/avr/include/util/delay.h **** 
+ 125:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/lib/avr/include/util/delay.h **** 
+ 132:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/lib/avr/include/util/delay.h **** 
+ 140:/usr/lib/avr/include/util/delay.h ****  */
+ 141:/usr/lib/avr/include/util/delay.h **** void
+ 142:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/lib/avr/include/util/delay.h **** {
+ 144:/usr/lib/avr/include/util/delay.h **** 	uint16_t __ticks;
+ 145:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 146:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 147:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 148:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 149:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 150:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 151:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 152:/usr/lib/avr/include/util/delay.h **** 
+ 153:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 154:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 155:/usr/lib/avr/include/util/delay.h **** 
+ 156:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 157:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 158:/usr/lib/avr/include/util/delay.h **** 
+ 159:/usr/lib/avr/include/util/delay.h **** 	#else
+ 160:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 161:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 162:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 163:/usr/lib/avr/include/util/delay.h **** 
+ 164:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 292               	.LM13:
+ 293 00f6 8FE4      		ldi r24,lo8(-15537)
+ 294 00f8 93EC      		ldi r25,hi8(-15537)
+ 295 00fa 0197      		1: sbiw r24,1
+ 296 00fc 01F4      		brne 1b
+ 297 00fe 00C0      		rjmp .
+ 298 0100 0000      		nop
+ 299               	.LBE20:
+ 300               	.LBE19:
+ 301               	.LBE18:
+ 303               	.Ltext2:
+ 109:main.c        ****   for( i; i >= 0; i-- )
+ 305               	.LM14:
+ 306 0102 0150      		subi r16,1
+ 307 0104 1109      		sbc r17,__zero_reg__
+ 308 0106 00F4      		brcc .L11
+ 309               	/* epilogue start */
+ 113:main.c        ****     _delay_ms(100);
+ 114:main.c        ****     //lcdputs counter
+ 115:main.c        ****     //yield()
+ 116:main.c        ****   }
+ 117:main.c        **** }
+ 311               	.LM15:
+ 312 0108 0F90      		pop __tmp_reg__
+ 313 010a 0F90      		pop __tmp_reg__
+ 314 010c 0F90      		pop __tmp_reg__
+ 315 010e 0F90      		pop __tmp_reg__
+ 316 0110 0F90      		pop __tmp_reg__
+ 317 0112 DF91      		pop r29
+ 318 0114 CF91      		pop r28
+ 319 0116 1F91      		pop r17
+ 320 0118 0F91      		pop r16
+ 321 011a 0895      		ret
+ 327               	.Lscope2:
+ 329               		.stabd	78,0,0
+ 331               	.global	task2
+ 333               	task2:
+ 334               		.stabd	46,0,0
+  91:main.c        **** {
+ 336               	.LM16:
+ 337               	.LFBB3:
+ 338 011c CF93      		push r28
+ 339 011e DF93      		push r29
+ 340 0120 CDB7      		in r28,__SP_L__
+ 341 0122 DEB7      		in r29,__SP_H__
+ 342               	/* prologue: function */
+ 343               	/* frame size = 0 */
+ 344               	/* stack size = 2 */
+ 345               	.L__stack_usage = 2
+  92:main.c        ****   if( setjmp( task2_jb ) == 0 )
+ 347               	.LM17:
+ 348 0124 80E0      		ldi r24,lo8(task2_jb)
+ 349 0126 90E0      		ldi r25,hi8(task2_jb)
+ 350 0128 0E94 0000 		call setjmp
+ 351 012c 892B      		or r24,r25
+ 352 012e 01F4      		brne .L13
+  94:main.c        ****     longjmp( task1_jb, 2 );
+ 354               	.LM18:
+ 355 0130 62E0      		ldi r22,lo8(2)
+ 356 0132 70E0      		ldi r23,0
+ 357 0134 00C0      		rjmp .L14
+ 358               	.L13:
+ 359               	.LBB21:
+  98:main.c        ****     displayTimer();
+ 361               	.LM19:
+ 362 0136 0E94 0000 		call displayTimer
+  99:main.c        ****     longjmp( task1_jb, 1 );
+ 364               	.LM20:
+ 365 013a 61E0      		ldi r22,lo8(1)
+ 366 013c 70E0      		ldi r23,0
+ 367               	.L14:
+ 368 013e 80E0      		ldi r24,lo8(task1_jb)
+ 369 0140 90E0      		ldi r25,hi8(task1_jb)
+ 370 0142 0E94 0000 		call longjmp
+ 371               	.LBE21:
+ 373               	.Lscope3:
+ 375               		.stabd	78,0,0
+ 377               	.global	task2_tramp
+ 379               	task2_tramp:
+ 380               		.stabd	46,0,0
+  80:main.c        **** {
+ 382               	.LM21:
+ 383               	.LFBB4:
+ 384               	/* prologue: function */
+ 385               	/* frame size = 0 */
+ 386               	/* stack size = 0 */
+ 387               	.L__stack_usage = 0
+  87:main.c        ****   task2();
+ 389               	.LM22:
+ 390 0146 0E94 0000 		call task2
+ 392               	.Lscope4:
+ 394               		.stabd	78,0,0
+ 395               	.global	__floatsisf
+ 396               	.global	__divsf3
+ 401               	.global	play_note_timer
+ 403               	play_note_timer:
+ 404               		.stabd	46,0,0
+ 118:main.c        **** 
+ 119:main.c        **** void playSong()
+ 120:main.c        **** {
+ 121:main.c        ****   int i = 0;
+ 122:main.c        ****   int (*play_note_ptr)(int, uint16_t, uint16_t);
+ 123:main.c        ****   play_note_ptr = &play_note_delay;//change to delay/timer to use different functionality
+ 124:main.c        ****   for( i; i < (sizeof(noteslist)/sizeof(uint8_t)); i++ )
+ 125:main.c        ****   {
+ 126:main.c        ****     switch (noteslist[i])
+ 127:main.c        ****     {
+ 128:main.c        ****       case quarter: //playQuarter();
+ 129:main.c        ****               (*play_note_ptr)( 500, keyslist[i], q_count);
+ 130:main.c        ****               break;
+ 131:main.c        ****       case half: //playHalf();
+ 132:main.c        ****               (*play_note_ptr)( 500, keyslist[i], h_count);
+ 133:main.c        ****               break;
+ 134:main.c        ****       case whole: //playWhole();
+ 135:main.c        ****               (*play_note_ptr)( 500, keyslist[i], w_count);
+ 136:main.c        ****               break;
+ 137:main.c        ****       case eigth:
+ 138:main.c        ****               (*play_note_ptr)( 500, keyslist[i], e_count);
+ 139:main.c        ****               break;
+ 140:main.c        ****       case sixteenth:
+ 141:main.c        ****               (*play_note_ptr)( 500, keyslist[i], s_count);
+ 142:main.c        ****               break;
+ 143:main.c        ****       case edot:
+ 144:main.c        ****               (*play_note_ptr)( 500, keyslist[i], edot_count);
+ 145:main.c        ****               break;
+ 146:main.c        ****       case qdot:
+ 147:main.c        ****               (*play_note_ptr)( 500, keyslist[i], qdot_count);
+ 148:main.c        ****               break;
+ 149:main.c        ****       case hdot:
+ 150:main.c        ****               (*play_note_ptr)( 500, keyslist[i], hdot_count);
+ 151:main.c        ****               break;
+ 152:main.c        ****     }
+ 153:main.c        ****   }
+ 154:main.c        ****   //yield();
+ 155:main.c        **** }
+ 156:main.c        **** 
+ 157:main.c        **** void play_note_timer( int amplitude, uint16_t pitch, uint16_t duration )
+ 158:main.c        **** {//play notes with a timer interrupt and an ADSR envelope
+ 406               	.LM23:
+ 407               	.LFBB5:
+ 408 014a CF92      		push r12
+ 409 014c DF92      		push r13
+ 410 014e EF92      		push r14
+ 411 0150 FF92      		push r15
+ 412 0152 CF93      		push r28
+ 413 0154 DF93      		push r29
+ 414               	/* prologue: function */
+ 415               	/* frame size = 0 */
+ 416               	/* stack size = 6 */
+ 417               	.L__stack_usage = 6
+ 418 0156 EA01      		movw r28,r20
+ 159:main.c        ****   ICR1 = pitch;
+ 420               	.LM24:
+ 421 0158 7093 8700 		sts 134+1,r23
+ 422 015c 6093 8600 		sts 134,r22
+ 160:main.c        ****   attack = duration / 4;
+ 424               	.LM25:
+ 425 0160 9A01      		movw r18,r20
+ 426 0162 3695      		lsr r19
+ 427 0164 2795      		ror r18
+ 428 0166 3695      		lsr r19
+ 429 0168 2795      		ror r18
+ 430 016a 3093 0000 		sts attack+1,r19
+ 431 016e 2093 0000 		sts attack,r18
+ 161:main.c        ****   decay = attack / 2;
+ 433               	.LM26:
+ 434 0172 2091 0000 		lds r18,attack
+ 435 0176 3091 0000 		lds r19,attack+1
+ 436 017a 3695      		lsr r19
+ 437 017c 2795      		ror r18
+ 438 017e 3093 0000 		sts decay+1,r19
+ 439 0182 2093 0000 		sts decay,r18
+ 162:main.c        ****   sustain = attack * 2;
+ 441               	.LM27:
+ 442 0186 2091 0000 		lds r18,attack
+ 443 018a 3091 0000 		lds r19,attack+1
+ 444 018e 220F      		lsl r18
+ 445 0190 331F      		rol r19
+ 446 0192 3093 0000 		sts sustain+1,r19
+ 447 0196 2093 0000 		sts sustain,r18
+ 163:main.c        ****   release = decay;
+ 449               	.LM28:
+ 450 019a 2091 0000 		lds r18,decay
+ 451 019e 3091 0000 		lds r19,decay+1
+ 452 01a2 3093 0000 		sts release+1,r19
+ 453 01a6 2093 0000 		sts release,r18
+ 164:main.c        **** 
+ 165:main.c        ****   note_amplitude = amplitude;
+ 455               	.LM29:
+ 456 01aa 9093 0000 		sts note_amplitude+1,r25
+ 457 01ae 8093 0000 		sts note_amplitude,r24
+ 166:main.c        **** 
+ 167:main.c        ****   increment = (amplitude / (duration / interrupt));
+ 459               	.LM30:
+ 460 01b2 BC01      		movw r22,r24
+ 461 01b4 8827      		clr r24
+ 462 01b6 77FD      		sbrc r23,7
+ 463 01b8 8095      		com r24
+ 464 01ba 982F      		mov r25,r24
+ 465 01bc 0E94 0000 		call __floatsisf
+ 466 01c0 6B01      		movw r12,r22
+ 467 01c2 7C01      		movw r14,r24
+ 468 01c4 BE01      		movw r22,r28
+ 469 01c6 80E0      		ldi r24,0
+ 470 01c8 90E0      		ldi r25,0
+ 471 01ca 0E94 0000 		call __floatunsisf
+ 472 01ce 2FE6      		ldi r18,lo8(111)
+ 473 01d0 32E1      		ldi r19,lo8(18)
+ 474 01d2 43E0      		ldi r20,lo8(3)
+ 475 01d4 52E4      		ldi r21,lo8(66)
+ 476 01d6 0E94 0000 		call __divsf3
+ 477 01da 9B01      		movw r18,r22
+ 478 01dc AC01      		movw r20,r24
+ 479 01de C701      		movw r24,r14
+ 480 01e0 B601      		movw r22,r12
+ 481 01e2 0E94 0000 		call __divsf3
+ 482 01e6 0E94 0000 		call __fixunssfsi
+ 483 01ea 7093 0000 		sts increment+1,r23
+ 484 01ee 6093 0000 		sts increment,r22
+ 168:main.c        ****   volume_counter = 0;
+ 486               	.LM31:
+ 487 01f2 1092 0000 		sts volume_counter+1,__zero_reg__
+ 488 01f6 1092 0000 		sts volume_counter,__zero_reg__
+ 169:main.c        ****   
+ 170:main.c        ****   note_timer = 0;
+ 490               	.LM32:
+ 491 01fa 1092 0000 		sts note_timer+1,__zero_reg__
+ 492 01fe 1092 0000 		sts note_timer,__zero_reg__
+ 171:main.c        ****   state = 0;
+ 494               	.LM33:
+ 495 0202 1092 0000 		sts state,__zero_reg__
+ 496               	.L17:
+ 172:main.c        ****   while( note_timer < attack )
+ 498               	.LM34:
+ 499 0206 2091 0000 		lds r18,note_timer
+ 500 020a 3091 0000 		lds r19,note_timer+1
+ 501 020e 8091 0000 		lds r24,attack
+ 502 0212 9091 0000 		lds r25,attack+1
+ 503 0216 2817      		cp r18,r24
+ 504 0218 3907      		cpc r19,r25
+ 505 021a 00F4      		brsh .L25
+ 173:main.c        ****     asm volatile("nop"::);
+ 507               	.LM35:
+ 508               	/* #APP */
+ 509               	 ;  173 "main.c" 1
+ 510 021c 0000      		nop
+ 511               	 ;  0 "" 2
+ 512               	/* #NOAPP */
+ 513 021e 00C0      		rjmp .L17
+ 514               	.L25:
+ 174:main.c        ****   note_timer = 0;
+ 516               	.LM36:
+ 517 0220 1092 0000 		sts note_timer+1,__zero_reg__
+ 518 0224 1092 0000 		sts note_timer,__zero_reg__
+ 175:main.c        ****   state = 1;
+ 520               	.LM37:
+ 521 0228 81E0      		ldi r24,lo8(1)
+ 522 022a 8093 0000 		sts state,r24
+ 523               	.L19:
+ 176:main.c        ****   while( note_timer < decay)
+ 525               	.LM38:
+ 526 022e 2091 0000 		lds r18,note_timer
+ 527 0232 3091 0000 		lds r19,note_timer+1
+ 528 0236 8091 0000 		lds r24,decay
+ 529 023a 9091 0000 		lds r25,decay+1
+ 530 023e 2817      		cp r18,r24
+ 531 0240 3907      		cpc r19,r25
+ 532 0242 00F4      		brsh .L26
+ 177:main.c        ****     asm volatile("nop"::);
+ 534               	.LM39:
+ 535               	/* #APP */
+ 536               	 ;  177 "main.c" 1
+ 537 0244 0000      		nop
+ 538               	 ;  0 "" 2
+ 539               	/* #NOAPP */
+ 540 0246 00C0      		rjmp .L19
+ 541               	.L26:
+ 178:main.c        ****   note_timer = 0;
+ 543               	.LM40:
+ 544 0248 1092 0000 		sts note_timer+1,__zero_reg__
+ 545 024c 1092 0000 		sts note_timer,__zero_reg__
+ 179:main.c        ****   state = 2;
+ 547               	.LM41:
+ 548 0250 82E0      		ldi r24,lo8(2)
+ 549 0252 8093 0000 		sts state,r24
+ 550               	.L21:
+ 180:main.c        ****   while( note_timer < sustain )
+ 552               	.LM42:
+ 553 0256 2091 0000 		lds r18,note_timer
+ 554 025a 3091 0000 		lds r19,note_timer+1
+ 555 025e 8091 0000 		lds r24,sustain
+ 556 0262 9091 0000 		lds r25,sustain+1
+ 557 0266 2817      		cp r18,r24
+ 558 0268 3907      		cpc r19,r25
+ 559 026a 00F4      		brsh .L27
+ 181:main.c        ****     asm volatile("nop"::);
+ 561               	.LM43:
+ 562               	/* #APP */
+ 563               	 ;  181 "main.c" 1
+ 564 026c 0000      		nop
+ 565               	 ;  0 "" 2
+ 566               	/* #NOAPP */
+ 567 026e 00C0      		rjmp .L21
+ 568               	.L27:
+ 182:main.c        ****   note_timer = 0;
+ 570               	.LM44:
+ 571 0270 1092 0000 		sts note_timer+1,__zero_reg__
+ 572 0274 1092 0000 		sts note_timer,__zero_reg__
+ 183:main.c        ****   state = 3;
+ 574               	.LM45:
+ 575 0278 83E0      		ldi r24,lo8(3)
+ 576 027a 8093 0000 		sts state,r24
+ 577               	.L23:
+ 184:main.c        ****   while( note_timer < release )
+ 579               	.LM46:
+ 580 027e 2091 0000 		lds r18,note_timer
+ 581 0282 3091 0000 		lds r19,note_timer+1
+ 582 0286 8091 0000 		lds r24,release
+ 583 028a 9091 0000 		lds r25,release+1
+ 584 028e 2817      		cp r18,r24
+ 585 0290 3907      		cpc r19,r25
+ 586 0292 00F4      		brsh .L28
+ 185:main.c        ****     asm volatile("nop"::);
+ 588               	.LM47:
+ 589               	/* #APP */
+ 590               	 ;  185 "main.c" 1
+ 591 0294 0000      		nop
+ 592               	 ;  0 "" 2
+ 593               	/* #NOAPP */
+ 594 0296 00C0      		rjmp .L23
+ 595               	.L28:
+ 596               	/* epilogue start */
+ 186:main.c        **** }
+ 598               	.LM48:
+ 599 0298 DF91      		pop r29
+ 600 029a CF91      		pop r28
+ 601 029c FF90      		pop r15
+ 602 029e EF90      		pop r14
+ 603 02a0 DF90      		pop r13
+ 604 02a2 CF90      		pop r12
+ 605 02a4 0895      		ret
+ 607               	.Lscope5:
+ 609               		.stabd	78,0,0
+ 614               	.global	play_note_delay
+ 616               	play_note_delay:
+ 617               		.stabd	46,0,0
+ 187:main.c        **** 
+ 188:main.c        **** void play_note_delay( int amplitude, uint16_t pitch, uint16_t duration )
+ 189:main.c        **** {//Play note with delay calculated ADSR envelope
+ 619               	.LM49:
+ 620               	.LFBB6:
+ 621 02a6 CF93      		push r28
+ 622 02a8 DF93      		push r29
+ 623               	/* prologue: function */
+ 624               	/* frame size = 0 */
+ 625               	/* stack size = 2 */
+ 626               	.L__stack_usage = 2
+ 627 02aa 9A01      		movw r18,r20
+ 190:main.c        ****   
+ 191:main.c        ****   ICR1 = pitch;
+ 629               	.LM50:
+ 630 02ac 7093 8700 		sts 134+1,r23
+ 631 02b0 6093 8600 		sts 134,r22
+ 192:main.c        ****   int attack = duration / 4;
+ 633               	.LM51:
+ 634 02b4 3695      		lsr r19
+ 635 02b6 2795      		ror r18
+ 636 02b8 3695      		lsr r19
+ 637 02ba 2795      		ror r18
+ 193:main.c        ****   int decay = attack / 2;
+ 639               	.LM52:
+ 640 02bc F901      		movw r30,r18
+ 641 02be F595      		asr r31
+ 642 02c0 E795      		ror r30
+ 194:main.c        ****   int sustain = attack * 2;
+ 644               	.LM53:
+ 645 02c2 E901      		movw r28,r18
+ 646 02c4 CC0F      		lsl r28
+ 647 02c6 DD1F      		rol r29
+ 195:main.c        ****   int release = decay;
+ 196:main.c        ****   int increment = amplitude / attack;
+ 649               	.LM54:
+ 650 02c8 B901      		movw r22,r18
+ 651 02ca 0E94 0000 		call __divmodhi4
+ 197:main.c        **** 
+ 198:main.c        ****   int i = 0;
+ 199:main.c        ****   int counter = 0;
+ 200:main.c        ****   for( i; i < attack; i++ )
+ 653               	.LM55:
+ 654 02ce AB01      		movw r20,r22
+ 198:main.c        ****   int i = 0;
+ 656               	.LM56:
+ 657 02d0 80E0      		ldi r24,0
+ 658 02d2 90E0      		ldi r25,0
+ 659               	.L30:
+ 661               	.LM57:
+ 662 02d4 8217      		cp r24,r18
+ 663 02d6 9307      		cpc r25,r19
+ 664 02d8 04F4      		brge .L40
+ 201:main.c        ****   {
+ 202:main.c        ****     counter += increment;
+ 203:main.c        ****     OCR1A = counter;
+ 666               	.LM58:
+ 667 02da 5093 8900 		sts 136+1,r21
+ 668 02de 4093 8800 		sts 136,r20
+ 669               	.LBB22:
+ 670               	.LBB23:
+ 672               	.Ltext3:
+ 674               	.LM59:
+ 675 02e2 A3EF      		ldi r26,lo8(499)
+ 676 02e4 B1E0      		ldi r27,hi8(499)
+ 677 02e6 1197      		1: sbiw r26,1
+ 678 02e8 01F4      		brne 1b
+ 679 02ea 00C0      		rjmp .
+ 680 02ec 0000      		nop
+ 681               	.LBE23:
+ 682               	.LBE22:
+ 684               	.Ltext4:
+ 200:main.c        ****   for( i; i < attack; i++ )
+ 686               	.LM60:
+ 687 02ee 0196      		adiw r24,1
+ 688 02f0 460F      		add r20,r22
+ 689 02f2 571F      		adc r21,r23
+ 690 02f4 00C0      		rjmp .L30
+ 691               	.L40:
+ 692 02f6 629F      		mul r22,r18
+ 693 02f8 A001      		movw r20,r0
+ 694 02fa 639F      		mul r22,r19
+ 695 02fc 500D      		add r21,r0
+ 696 02fe 729F      		mul r23,r18
+ 697 0300 500D      		add r21,r0
+ 698 0302 1124      		clr r1
+ 200:main.c        ****   for( i; i < attack; i++ )
+ 700               	.LM61:
+ 701 0304 9A01      		movw r18,r20
+ 702 0306 80E0      		ldi r24,0
+ 703 0308 90E0      		ldi r25,0
+ 704               	.L33:
+ 204:main.c        ****     _delay_ms(1);
+ 205:main.c        ****   }
+ 206:main.c        **** 
+ 207:main.c        ****   i = 0;
+ 208:main.c        ****   for( i; i< decay; i++)
+ 706               	.LM62:
+ 707 030a 8E17      		cp r24,r30
+ 708 030c 9F07      		cpc r25,r31
+ 709 030e 04F4      		brge .L41
+ 209:main.c        ****   {
+ 210:main.c        ****     counter -= increment;
+ 711               	.LM63:
+ 712 0310 261B      		sub r18,r22
+ 713 0312 370B      		sbc r19,r23
+ 211:main.c        ****     OCR1A = counter;
+ 715               	.LM64:
+ 716 0314 3093 8900 		sts 136+1,r19
+ 717 0318 2093 8800 		sts 136,r18
+ 718               	.LBB24:
+ 719               	.LBB25:
+ 721               	.Ltext5:
+ 723               	.LM65:
+ 724 031c A3EF      		ldi r26,lo8(499)
+ 725 031e B1E0      		ldi r27,hi8(499)
+ 726 0320 1197      		1: sbiw r26,1
+ 727 0322 01F4      		brne 1b
+ 728 0324 00C0      		rjmp .
+ 729 0326 0000      		nop
+ 730               	.LBE25:
+ 731               	.LBE24:
+ 733               	.Ltext6:
+ 208:main.c        ****   for( i; i< decay; i++)
+ 735               	.LM66:
+ 736 0328 0196      		adiw r24,1
+ 737 032a 00C0      		rjmp .L33
+ 738               	.L41:
+ 739 032c AA27      		clr r26
+ 740 032e BB27      		clr r27
+ 741 0330 A61B      		sub r26,r22
+ 742 0332 B70B      		sbc r27,r23
+ 743 0334 AE9F      		mul r26,r30
+ 744 0336 C001      		movw r24,r0
+ 745 0338 AF9F      		mul r26,r31
+ 746 033a 900D      		add r25,r0
+ 747 033c BE9F      		mul r27,r30
+ 748 033e 900D      		add r25,r0
+ 749 0340 1124      		clr r1
+ 750 0342 840F      		add r24,r20
+ 751 0344 951F      		adc r25,r21
+ 208:main.c        ****   for( i; i< decay; i++)
+ 753               	.LM67:
+ 754 0346 20E0      		ldi r18,0
+ 755 0348 30E0      		ldi r19,0
+ 756               	.L36:
+ 212:main.c        ****     _delay_ms(1);
+ 213:main.c        ****   }
+ 214:main.c        **** 
+ 215:main.c        ****   i = 0;
+ 216:main.c        ****   for( i; i < sustain; i++ )
+ 758               	.LM68:
+ 759 034a 2C17      		cp r18,r28
+ 760 034c 3D07      		cpc r19,r29
+ 761 034e 04F4      		brge .L42
+ 762               	.LBB26:
+ 763               	.LBB27:
+ 765               	.Ltext7:
+ 767               	.LM69:
+ 768 0350 A3EF      		ldi r26,lo8(499)
+ 769 0352 B1E0      		ldi r27,hi8(499)
+ 770 0354 1197      		1: sbiw r26,1
+ 771 0356 01F4      		brne 1b
+ 772 0358 00C0      		rjmp .
+ 773 035a 0000      		nop
+ 774               	.LBE27:
+ 775               	.LBE26:
+ 777               	.Ltext8:
+ 779               	.LM70:
+ 780 035c 2F5F      		subi r18,-1
+ 781 035e 3F4F      		sbci r19,-1
+ 782 0360 00C0      		rjmp .L36
+ 783               	.L42:
+ 784 0362 20E0      		ldi r18,0
+ 785 0364 30E0      		ldi r19,0
+ 786               	.L38:
+ 217:main.c        ****   {
+ 218:main.c        ****     _delay_ms(1);
+ 219:main.c        ****   }
+ 220:main.c        **** 
+ 221:main.c        ****   i = 0;
+ 222:main.c        ****   for( i; i < release; i++)
+ 788               	.LM71:
+ 789 0366 2E17      		cp r18,r30
+ 790 0368 3F07      		cpc r19,r31
+ 791 036a 04F4      		brge .L43
+ 223:main.c        ****   {
+ 224:main.c        ****     counter -= increment;
+ 793               	.LM72:
+ 794 036c 861B      		sub r24,r22
+ 795 036e 970B      		sbc r25,r23
+ 225:main.c        ****     OCR1A = counter;
+ 797               	.LM73:
+ 798 0370 9093 8900 		sts 136+1,r25
+ 799 0374 8093 8800 		sts 136,r24
+ 800               	.LBB28:
+ 801               	.LBB29:
+ 803               	.Ltext9:
+ 805               	.LM74:
+ 806 0378 A3EF      		ldi r26,lo8(499)
+ 807 037a B1E0      		ldi r27,hi8(499)
+ 808 037c 1197      		1: sbiw r26,1
+ 809 037e 01F4      		brne 1b
+ 810 0380 00C0      		rjmp .
+ 811 0382 0000      		nop
+ 812               	.LBE29:
+ 813               	.LBE28:
+ 815               	.Ltext10:
+ 222:main.c        ****   for( i; i < release; i++)
+ 817               	.LM75:
+ 818 0384 2F5F      		subi r18,-1
+ 819 0386 3F4F      		sbci r19,-1
+ 820 0388 00C0      		rjmp .L38
+ 821               	.L43:
+ 822               	/* epilogue start */
+ 226:main.c        ****     _delay_ms(1);
+ 227:main.c        ****   }
+ 228:main.c        **** 
+ 229:main.c        **** }
+ 824               	.LM76:
+ 825 038a DF91      		pop r29
+ 826 038c CF91      		pop r28
+ 827 038e 0895      		ret
+ 834               	.Lscope6:
+ 836               		.stabd	78,0,0
+ 838               	.global	playSong
+ 840               	playSong:
+ 841               		.stabd	46,0,0
+ 120:main.c        **** {
+ 843               	.LM77:
+ 844               	.LFBB7:
+ 845 0390 0F93      		push r16
+ 846 0392 1F93      		push r17
+ 847 0394 CF93      		push r28
+ 848 0396 DF93      		push r29
+ 849               	/* prologue: function */
+ 850               	/* frame size = 0 */
+ 851               	/* stack size = 4 */
+ 852               	.L__stack_usage = 4
+ 853 0398 00E0      		ldi r16,lo8(noteslist)
+ 854 039a 10E0      		ldi r17,hi8(noteslist)
+ 855 039c C0E0      		ldi r28,lo8(keyslist)
+ 856 039e D0E0      		ldi r29,hi8(keyslist)
+ 857               	.L45:
+ 124:main.c        ****   for( i; i < (sizeof(noteslist)/sizeof(uint8_t)); i++ )
+ 859               	.LM78:
+ 860 03a0 F0E0      		ldi r31,hi8(noteslist+26)
+ 861 03a2 0030      		cpi r16,lo8(noteslist+26)
+ 862 03a4 1F07      		cpc r17,r31
+ 863 03a6 01F0      		breq .L58
+ 126:main.c        ****     switch (noteslist[i])
+ 865               	.LM79:
+ 866 03a8 F801      		movw r30,r16
+ 867 03aa 8191      		ld r24,Z+
+ 868 03ac 8F01      		movw r16,r30
+ 869 03ae 90E0      		ldi r25,0
+ 870 03b0 8930      		cpi r24,9
+ 871 03b2 9105      		cpc r25,__zero_reg__
+ 872 03b4 00F4      		brsh .L46
+ 873 03b6 FC01      		movw r30,r24
+ 874 03b8 E050      		subi r30,lo8(-(gs(.L48)))
+ 875 03ba F040      		sbci r31,hi8(-(gs(.L48)))
+ 876 03bc 0C94 0000 		jmp __tablejump2__
+ 877               		.section	.progmem.gcc_sw_table,"a",@progbits
+ 878               		.p2align	1
+ 879               	.L48:
+ 880 0000 0000      		.word gs(.L47)
+ 881 0002 0000      		.word gs(.L49)
+ 882 0004 0000      		.word gs(.L50)
+ 883 0006 0000      		.word gs(.L51)
+ 884 0008 0000      		.word gs(.L52)
+ 885 000a 0000      		.word gs(.L46)
+ 886 000c 0000      		.word gs(.L53)
+ 887 000e 0000      		.word gs(.L54)
+ 888 0010 0000      		.word gs(.L55)
+ 889               		.text
+ 890               	.L50:
+ 129:main.c        ****               (*play_note_ptr)( 500, keyslist[i], q_count);
+ 892               	.LM80:
+ 893 03c0 6881      		ld r22,Y
+ 894 03c2 7981      		ldd r23,Y+1
+ 895 03c4 44EF      		ldi r20,lo8(-12)
+ 896 03c6 51E0      		ldi r21,lo8(1)
+ 897 03c8 00C0      		rjmp .L57
+ 898               	.L49:
+ 132:main.c        ****               (*play_note_ptr)( 500, keyslist[i], h_count);
+ 900               	.LM81:
+ 901 03ca 6881      		ld r22,Y
+ 902 03cc 7981      		ldd r23,Y+1
+ 903 03ce 48EE      		ldi r20,lo8(-24)
+ 904 03d0 53E0      		ldi r21,lo8(3)
+ 905 03d2 00C0      		rjmp .L57
+ 906               	.L47:
+ 135:main.c        ****               (*play_note_ptr)( 500, keyslist[i], w_count);
+ 908               	.LM82:
+ 909 03d4 6881      		ld r22,Y
+ 910 03d6 7981      		ldd r23,Y+1
+ 911 03d8 40ED      		ldi r20,lo8(-48)
+ 912 03da 57E0      		ldi r21,lo8(7)
+ 913 03dc 00C0      		rjmp .L57
+ 914               	.L51:
+ 138:main.c        ****               (*play_note_ptr)( 500, keyslist[i], e_count);
+ 916               	.LM83:
+ 917 03de 6881      		ld r22,Y
+ 918 03e0 7981      		ldd r23,Y+1
+ 919 03e2 4AEF      		ldi r20,lo8(-6)
+ 920 03e4 50E0      		ldi r21,0
+ 921 03e6 00C0      		rjmp .L57
+ 922               	.L52:
+ 141:main.c        ****               (*play_note_ptr)( 500, keyslist[i], s_count);
+ 924               	.LM84:
+ 925 03e8 6881      		ld r22,Y
+ 926 03ea 7981      		ldd r23,Y+1
+ 927 03ec 4DE7      		ldi r20,lo8(125)
+ 928 03ee 50E0      		ldi r21,0
+ 929 03f0 00C0      		rjmp .L57
+ 930               	.L53:
+ 144:main.c        ****               (*play_note_ptr)( 500, keyslist[i], edot_count);
+ 932               	.LM85:
+ 933 03f2 6881      		ld r22,Y
+ 934 03f4 7981      		ldd r23,Y+1
+ 935 03f6 47E7      		ldi r20,lo8(119)
+ 936 03f8 51E0      		ldi r21,lo8(1)
+ 937 03fa 00C0      		rjmp .L57
+ 938               	.L55:
+ 147:main.c        ****               (*play_note_ptr)( 500, keyslist[i], qdot_count);
+ 940               	.LM86:
+ 941 03fc 6881      		ld r22,Y
+ 942 03fe 7981      		ldd r23,Y+1
+ 943 0400 4EEE      		ldi r20,lo8(-18)
+ 944 0402 52E0      		ldi r21,lo8(2)
+ 945 0404 00C0      		rjmp .L57
+ 946               	.L54:
+ 150:main.c        ****               (*play_note_ptr)( 500, keyslist[i], hdot_count);
+ 948               	.LM87:
+ 949 0406 6881      		ld r22,Y
+ 950 0408 7981      		ldd r23,Y+1
+ 951 040a 4CED      		ldi r20,lo8(-36)
+ 952 040c 55E0      		ldi r21,lo8(5)
+ 953               	.L57:
+ 954 040e 84EF      		ldi r24,lo8(-12)
+ 955 0410 91E0      		ldi r25,lo8(1)
+ 956 0412 0E94 0000 		call play_note_delay
+ 957               	.L46:
+ 958 0416 2296      		adiw r28,2
+ 959 0418 00C0      		rjmp .L45
+ 960               	.L58:
+ 961               	/* epilogue start */
+ 155:main.c        **** }
+ 963               	.LM88:
+ 964 041a DF91      		pop r29
+ 965 041c CF91      		pop r28
+ 966 041e 1F91      		pop r17
+ 967 0420 0F91      		pop r16
+ 968 0422 0895      		ret
+ 970               	.Lscope7:
+ 972               		.stabd	78,0,0
+ 974               	.global	task1
+ 976               	task1:
+ 977               		.stabd	46,0,0
+  64:main.c        **** {
+ 979               	.LM89:
+ 980               	.LFBB8:
+ 981 0424 CF93      		push r28
+ 982 0426 DF93      		push r29
+ 983 0428 CDB7      		in r28,__SP_L__
+ 984 042a DEB7      		in r29,__SP_H__
+ 985               	/* prologue: function */
+ 986               	/* frame size = 0 */
+ 987               	/* stack size = 2 */
+ 988               	.L__stack_usage = 2
+  67:main.c        ****     if( setjmp( task1_jb) == 0 )
+ 990               	.LM90:
+ 991 042c 80E0      		ldi r24,lo8(task1_jb)
+ 992 042e 90E0      		ldi r25,hi8(task1_jb)
+ 993 0430 0E94 0000 		call setjmp
+ 994 0434 892B      		or r24,r25
+ 995 0436 01F4      		brne .L60
+ 996               	.LBB30:
+ 997               	.LBB31:
+ 998               	.LBB32:
+  87:main.c        ****   task2();
+ 1000               	.LM91:
+ 1001 0438 0E94 0000 		call task2
+ 1002               	.L60:
+ 1003               	.LBE32:
+ 1004               	.LBE31:
+ 1005               	.LBE30:
+  73:main.c        ****       playSong();
+ 1007               	.LM92:
+ 1008 043c 0E94 0000 		call playSong
+  74:main.c        ****       longjmp( task2_jb, 1 );
+ 1010               	.LM93:
+ 1011 0440 61E0      		ldi r22,lo8(1)
+ 1012 0442 70E0      		ldi r23,0
+ 1013 0444 80E0      		ldi r24,lo8(task2_jb)
+ 1014 0446 90E0      		ldi r25,hi8(task2_jb)
+ 1015 0448 0E94 0000 		call longjmp
+ 1017               	.Lscope8:
+ 1019               		.stabd	78,0,0
+ 1022               	.global	InitTimer0
+ 1024               	InitTimer0:
+ 1025               		.stabd	46,0,0
+ 230:main.c        **** 
+ 231:main.c        **** /*void play_note( int amplitude, uint16_t pitch, uint16_t duration )
+ 232:main.c        **** {//Play note with no ADSR envelope
+ 233:main.c        ****   ICR1 = pitch;
+ 234:main.c        ****   OCR1A = amplitude;
+ 235:main.c        ****   dynamic_delay(duration);
+ 236:main.c        ****   OCR1A = 0;
+ 237:main.c        ****   _delay_ms(25);
+ 238:main.c        **** }*/
+ 239:main.c        **** 
+ 240:main.c        **** int InitTimer0( uint8_t preScalar ) {
+ 1027               	.LM94:
+ 1028               	.LFBB9:
+ 1029               	/* prologue: function */
+ 1030               	/* frame size = 0 */
+ 1031               	/* stack size = 0 */
+ 1032               	.L__stack_usage = 0
+ 241:main.c        ****   uint8_t preScalarMask = ~( ( 1 << CS02 ) | ( 1 << CS01 ) | ( 1 << CS00 ) );
+ 242:main.c        ****   uint8_t wgmMask = ~( ( 1 << WGM01 ) | ( 1 << WGM00 ) );
+ 243:main.c        ****   uint8_t ocMask = ~ ( ( 1 << COM0A1 ) | ( 1 << COM0A0 ) );
+ 244:main.c        ****   TCCR0A = ( TCCR0A & ( preScalarMask & wgmMask & ocMask ) ) | preScalar;
+ 1034               	.LM95:
+ 1035 044c 94B5      		in r25,0x24
+ 1036 044e 9078      		andi r25,lo8(-128)
+ 1037 0450 982B      		or r25,r24
+ 1038 0452 94BD      		out 0x24,r25
+ 245:main.c        ****   
+ 246:main.c        ****   TCNT0 = 0;
+ 1040               	.LM96:
+ 1041 0454 16BC      		out 0x26,__zero_reg__
+ 247:main.c        ****   TIFR0 = TIFR0 & ~( ( 1 << TOV0 ) | ( 1 << OCF0A ) );
+ 1043               	.LM97:
+ 1044 0456 85B3      		in r24,0x15
+ 1045 0458 8C7F      		andi r24,lo8(-4)
+ 1046 045a 85BB      		out 0x15,r24
+ 248:main.c        ****   //Enable interrupts
+ 249:main.c        ****   TIMSK0 = ( TIMSK0 & ~( 1 << OCIE0A ) ) | ( 1 << TOIE0 );
+ 1048               	.LM98:
+ 1049 045c EEE6      		ldi r30,lo8(110)
+ 1050 045e F0E0      		ldi r31,0
+ 1051 0460 8081      		ld r24,Z
+ 1052 0462 8C7F      		andi r24,lo8(-4)
+ 1053 0464 8160      		ori r24,lo8(1)
+ 1054 0466 8083      		st Z,r24
+ 250:main.c        ****   
+ 251:main.c        ****   return 0;
+ 252:main.c        **** }
+ 1056               	.LM99:
+ 1057 0468 80E0      		ldi r24,0
+ 1058 046a 90E0      		ldi r25,0
+ 1059 046c 0895      		ret
+ 1061               	.Lscope9:
+ 1063               		.stabd	78,0,0
+ 1066               	.global	dynamic_delay
+ 1068               	dynamic_delay:
+ 1069               		.stabd	46,0,0
+ 253:main.c        **** 
+ 254:main.c        **** void dynamic_delay( uint16_t count )
+ 255:main.c        **** {
+ 1071               	.LM100:
+ 1072               	.LFBB10:
+ 1073               	/* prologue: function */
+ 1074               	/* frame size = 0 */
+ 1075               	/* stack size = 0 */
+ 1076               	.L__stack_usage = 0
+ 1077               	.L63:
+ 256:main.c        ****   while( count-- )
+ 1079               	.LM101:
+ 1080 046e 0097      		sbiw r24,0
+ 1081 0470 01F0      		breq .L65
+ 1082               	.LBB33:
+ 1083               	.LBB34:
+ 1085               	.Ltext11:
+ 1087               	.LM102:
+ 1088 0472 E3EF      		ldi r30,lo8(499)
+ 1089 0474 F1E0      		ldi r31,hi8(499)
+ 1090 0476 3197      		1: sbiw r30,1
+ 1091 0478 01F4      		brne 1b
+ 1092 047a 00C0      		rjmp .
+ 1093 047c 0000      		nop
+ 1094 047e 0197      		sbiw r24,1
+ 1095 0480 00C0      		rjmp .L63
+ 1096               	.L65:
+ 1097               	/* epilogue start */
+ 1098               	.LBE34:
+ 1099               	.LBE33:
+ 1101               	.Ltext12:
+ 257:main.c        ****   {
+ 258:main.c        ****     _delay_ms(1);
+ 259:main.c        ****   }
+ 260:main.c        **** }
+ 1103               	.LM103:
+ 1104 0482 0895      		ret
+ 1106               	.Lscope10:
+ 1108               		.stabd	78,0,0
+ 1110               	.global	InitButterfly
+ 1112               	InitButterfly:
+ 1113               		.stabd	46,0,0
+ 261:main.c        **** 
+ 262:main.c        **** int InitButterfly( void )
+ 263:main.c        **** {
+ 1115               	.LM104:
+ 1116               	.LFBB11:
+ 1117               	/* prologue: function */
+ 1118               	/* frame size = 0 */
+ 1119               	/* stack size = 0 */
+ 1120               	.L__stack_usage = 0
+ 264:main.c        ****   PCMSK0 = 0x00;
+ 1122               	.LM105:
+ 1123 0484 1092 6B00 		sts 107,__zero_reg__
+ 265:main.c        ****   PCMSK1 = 0x00;
+ 1125               	.LM106:
+ 1126 0488 1092 6C00 		sts 108,__zero_reg__
+ 266:main.c        **** 
+ 267:main.c        ****   DIDR0 = 0x00;
+ 1128               	.LM107:
+ 1129 048c 1092 7E00 		sts 126,__zero_reg__
+ 268:main.c        ****   DIDR1 = 0x00;
+ 1131               	.LM108:
+ 1132 0490 1092 7F00 		sts 127,__zero_reg__
+ 269:main.c        ****   return 0;
+ 270:main.c        **** }
+ 1134               	.LM109:
+ 1135 0494 80E0      		ldi r24,0
+ 1136 0496 90E0      		ldi r25,0
+ 1137 0498 0895      		ret
+ 1139               	.Lscope11:
+ 1141               		.stabd	78,0,0
+ 1143               	.global	InitSound
+ 1145               	InitSound:
+ 1146               		.stabd	46,0,0
+ 271:main.c        **** 
+ 272:main.c        **** int InitSound( void )
+ 273:main.c        **** {
+ 1148               	.LM110:
+ 1149               	.LFBB12:
+ 1150               	/* prologue: function */
+ 1151               	/* frame size = 0 */
+ 1152               	/* stack size = 0 */
+ 1153               	.L__stack_usage = 0
+ 274:main.c        ****   // Enable PortB5 output
+ 275:main.c        ****   DDRB = DDRB | ( 1 << PB5 );
+ 1155               	.LM111:
+ 1156 049a 259A      		sbi 0x4,5
+ 276:main.c        ****   // Set output pin Port B5 to 0
+ 277:main.c        ****   PORTB = ( PORTB & ( ~ ( 1 << PB5 ) ) ) | ( 0 << PB5 );
+ 1158               	.LM112:
+ 1159 049c 2D98      		cbi 0x5,5
+ 278:main.c        ****   // Enable output compare toggle mode
+ 279:main.c        ****   TCCR1A = ( TCCR1A & (~ ( ( 1 << COM1A1 ) | (1 << COM1A0) ) ) ) | ( ( 1 << COM1A1 ) | ( 0 << COM1A
+ 1161               	.LM113:
+ 1162 049e A0E8      		ldi r26,lo8(-128)
+ 1163 04a0 B0E0      		ldi r27,0
+ 1164 04a2 8C91      		ld r24,X
+ 1165 04a4 8F73      		andi r24,lo8(63)
+ 1166 04a6 8068      		ori r24,lo8(-128)
+ 1167 04a8 8C93      		st X,r24
+ 280:main.c        ****   // Enable phase and frequency correct mode, WGM=1000
+ 281:main.c        ****   TCCR1B = ( TCCR1B & (~ ( ( 1 << WGM13 ) | (1 << WGM12) ) ) ) | ( ( 1 << WGM13 ) | ( 0 << WGM12 ) 
+ 1169               	.LM114:
+ 1170 04aa E1E8      		ldi r30,lo8(-127)
+ 1171 04ac F0E0      		ldi r31,0
+ 1172 04ae 8081      		ld r24,Z
+ 1173 04b0 877E      		andi r24,lo8(-25)
+ 1174 04b2 8061      		ori r24,lo8(16)
+ 1175 04b4 8083      		st Z,r24
+ 282:main.c        ****   TCCR1A = ( TCCR1A & (~ ( ( 1 << WGM11 ) | (1 << WGM10) ) ) ) | ( ( 0 << WGM11 ) | ( 0 << WGM10 ) 
+ 1177               	.LM115:
+ 1178 04b6 8C91      		ld r24,X
+ 1179 04b8 8C7F      		andi r24,lo8(-4)
+ 1180 04ba 8C93      		st X,r24
+ 283:main.c        **** 
+ 284:main.c        ****   // Set clock to prescalar of 1
+ 285:main.c        ****   TCCR1B = ( TCCR1B & (~ ( ( 1 << CS12 ) | ( 1 << CS11 ) | ( 1 << CS10 ) ) ) ) | ( ( 0 << CS12 ) | 
+ 1182               	.LM116:
+ 1183 04bc 8081      		ld r24,Z
+ 1184 04be 887F      		andi r24,lo8(-8)
+ 1185 04c0 8160      		ori r24,lo8(1)
+ 1186 04c2 8083      		st Z,r24
+ 286:main.c        ****   return 0;
+ 287:main.c        **** }...
+ 1188               	.LM117:
+ 1189 04c4 80E0      		ldi r24,0
+ 1190 04c6 90E0      		ldi r25,0
+ 1191 04c8 0895      		ret
+ 1193               	.Lscope12:
+ 1195               		.stabd	78,0,0
+ 1196               		.section	.text.startup,"ax",@progbits
+ 1198               	.global	main
+ 1200               	main:
+ 1201               		.stabd	46,0,0
+  47:main.c        **** {
+ 1203               	.LM118:
+ 1204               	.LFBB13:
+ 1205               	/* prologue: function */
+ 1206               	/* frame size = 0 */
+ 1207               	/* stack size = 0 */
+ 1208               	.L__stack_usage = 0
+  48:main.c        ****   cli();
+ 1210               	.LM119:
+ 1211               	/* #APP */
+ 1212               	 ;  48 "main.c" 1
+ 1213 0000 F894      		cli
+ 1214               	 ;  0 "" 2
+  49:main.c        ****   InitButterfly();
+ 1216               	.LM120:
+ 1217               	/* #NOAPP */
+ 1218 0002 0E94 0000 		call InitButterfly
+  50:main.c        ****   LCD_Init();
+ 1220               	.LM121:
+ 1221 0006 0E94 0000 		call LCD_Init
+  53:main.c        ****   InitSound();
+ 1223               	.LM122:
+ 1224 000a 0E94 0000 		call InitSound
+  54:main.c        ****   sei();
+ 1226               	.LM123:
+ 1227               	/* #APP */
+ 1228               	 ;  54 "main.c" 1
+ 1229 000e 7894      		sei
+ 1230               	 ;  0 "" 2
+ 1231               	/* #NOAPP */
+ 1232               	.LBB35:
+  58:main.c        ****       task1();
+ 1234               	.LM124:
+ 1235 0010 0E94 0000 		call task1
+ 1236               	.LBE35:
+ 1238               	.Lscope13:
+ 1240               		.stabd	78,0,0
+ 1241               		.comm	task4_jb,23,1
+ 1242               		.comm	task3_jb,23,1
+ 1243               		.comm	task2_jb,23,1
+ 1244               		.comm	task1_jb,23,1
+ 1245               		.comm	note_amplitude,2,1
+ 1246               		.comm	volume_counter,2,1
+ 1247               		.comm	increment,2,1
+ 1248               		.comm	state,1,1
+ 1249               		.comm	release,2,1
+ 1250               		.comm	sustain,2,1
+ 1251               		.comm	decay,2,1
+ 1252               		.comm	attack,2,1
+ 1253               		.comm	note_timer,2,1
+ 1254               	.global	noteslist
+ 1255               		.data
+ 1258               	noteslist:
+ 1259 0000 03        		.byte	3
+ 1260 0001 03        		.byte	3
+ 1261 0002 06        		.byte	6
+ 1262 0003 03        		.byte	3
+ 1263 0004 04        		.byte	4
+ 1264 0005 03        		.byte	3
+ 1265 0006 03        		.byte	3
+ 1266 0007 03        		.byte	3
+ 1267 0008 03        		.byte	3
+ 1268 0009 03        		.byte	3
+ 1269 000a 06        		.byte	6
+ 1270 000b 03        		.byte	3
+ 1271 000c 04        		.byte	4
+ 1272 000d 03        		.byte	3
+ 1273 000e 03        		.byte	3
+ 1274 000f 03        		.byte	3
+ 1275 0010 03        		.byte	3
+ 1276 0011 03        		.byte	3
+ 1277 0012 03        		.byte	3
+ 1278 0013 04        		.byte	4
+ 1279 0014 03        		.byte	3
+ 1280 0015 04        		.byte	4
+ 1281 0016 03        		.byte	3
+ 1282 0017 03        		.byte	3
+ 1283 0018 08        		.byte	8
+ 1284 0019 07        		.byte	7
+ 1285               	.global	keyslist
+ 1288               	keyslist:
+ 1289 001a 8E0A      		.word	2702
+ 1290 001c 0500      		.word	5
+ 1291 001e E008      		.word	2272
+ 1292 0020 8E0A      		.word	2702
+ 1293 0022 8E0A      		.word	2702
+ 1294 0024 E807      		.word	2024
+ 1295 0026 8E0A      		.word	2702
+ 1296 0028 D60B      		.word	3030
+ 1297 002a 8E0A      		.word	2702
+ 1298 002c 0500      		.word	5
+ 1299 002e 0D07      		.word	1805
+ 1300 0030 8E0A      		.word	2702
+ 1301 0032 8E0A      		.word	2702
+ 1302 0034 A706      		.word	1703
+ 1303 0036 0D07      		.word	1805
+ 1304 0038 E008      		.word	2272
+ 1305 003a 8E0A      		.word	2702
+ 1306 003c 0D07      		.word	1805
+ 1307 003e 4705      		.word	1351
+ 1308 0040 8E0A      		.word	2702
+ 1309 0042 D60B      		.word	3030
+ 1310 0044 D60B      		.word	3030
+ 1311 0046 1A0E      		.word	3610
+ 1312 0048 6909      		.word	2409
+ 1313 004a 8E0A      		.word	2702
+ 1314 004c 0500      		.word	5
+ 1330               		.text
+ 1332               	.Letext0:
+ 1333               		.ident	"GCC: (GNU) 4.8.2"
+ 1334               	.global __do_copy_data
+ 1335               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 main.c
+     /tmp/cc1HdkrQ.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cc1HdkrQ.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cc1HdkrQ.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cc1HdkrQ.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cc1HdkrQ.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cc1HdkrQ.s:129    .text:0000000000000000 __vector_11
+                            *COM*:0000000000000002 note_timer
+                            *COM*:0000000000000001 state
+                            *COM*:0000000000000002 volume_counter
+                            *COM*:0000000000000002 increment
+     /tmp/cc1HdkrQ.s:248    .text:00000000000000c6 displayTimer
+     /tmp/cc1HdkrQ.s:333    .text:000000000000011c task2
+                            *COM*:0000000000000017 task2_jb
+                            *COM*:0000000000000017 task1_jb
+     /tmp/cc1HdkrQ.s:379    .text:0000000000000146 task2_tramp
+     /tmp/cc1HdkrQ.s:403    .text:000000000000014a play_note_timer
+                            *COM*:0000000000000002 attack
+                            *COM*:0000000000000002 decay
+                            *COM*:0000000000000002 sustain
+                            *COM*:0000000000000002 release
+                            *COM*:0000000000000002 note_amplitude
+     /tmp/cc1HdkrQ.s:616    .text:00000000000002a6 play_note_delay
+     /tmp/cc1HdkrQ.s:840    .text:0000000000000390 playSong
+     /tmp/cc1HdkrQ.s:1258   .data:0000000000000000 noteslist
+     /tmp/cc1HdkrQ.s:1288   .data:000000000000001a keyslist
+     /tmp/cc1HdkrQ.s:976    .text:0000000000000424 task1
+     /tmp/cc1HdkrQ.s:1024   .text:000000000000044c InitTimer0
+     /tmp/cc1HdkrQ.s:1068   .text:000000000000046e dynamic_delay
+     /tmp/cc1HdkrQ.s:1112   .text:0000000000000484 InitButterfly
+     /tmp/cc1HdkrQ.s:1145   .text:000000000000049a InitSound
+     /tmp/cc1HdkrQ.s:1200   .text.startup:0000000000000000 main
+                            *COM*:0000000000000017 task4_jb
+                            *COM*:0000000000000017 task3_jb
+
+UNDEFINED SYMBOLS
+__floatunsisf
+__addsf3
+__fixunssfsi
+itoa
+LCD_puts
+setjmp
+longjmp
+__floatsisf
+__divsf3
+__divmodhi4
+__tablejump2__
+LCD_Init
+__do_copy_data
+__do_clear_bss
